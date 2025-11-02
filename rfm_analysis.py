@@ -1,0 +1,414 @@
+"""RFM (Recency, Frequency, Monetary) customer segmentation module."""
+
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from typing import Dict, Tuple
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+import config
+
+
+class RFMAnalyzer:
+    """Performs RFM analysis and customer segmentation."""
+    
+    def __init__(self, data: pd.DataFrame):
+        """
+        Initialize RFM analyzer.
+        
+        Args:
+            data: Preprocessed sales DataFrame
+        """
+        self.data = data
+        self.current_date = data['date'].max()
+        self.rfm_data = None
+        
+    def calculate_rfm(self) -> pd.DataFrame:
+        """
+        Calculate RFM metrics for each customer.
+        
+        Returns:
+            DataFrame with Recency, Frequency, and Monetary values
+        """
+        # Aggregate by customer
+        rfm = self.data.groupby('customer_name').agg({
+            'date': lambda x: (self.current_date - x.max()).days,  # Recency
+            'order_id': 'nunique',  # Frequency
+            'total': 'sum'  # Monetary
+        }).reset_index()
+        
+        rfm.columns = ['customer_name', 'recency', 'frequency', 'monetary']
+        
+        # Calculate RFM scores (1-5, where 5 is best)
+        # Use try-except to handle cases with duplicate values
+        try:
+            rfm['r_score'] = pd.qcut(rfm['recency'], q=config.RFM_BINS, labels=[5, 4, 3, 2, 1], duplicates='drop')
+        except ValueError:
+            # Fall back to percentile-based scoring if qcut fails
+            rfm['r_score'] = pd.cut(rfm['recency'], 
+                                    bins=config.RFM_BINS, 
+                                    labels=[5, 4, 3, 2, 1], 
+                                    duplicates='drop',
+                                    include_lowest=True)
+        
+        try:
+            rfm['f_score'] = pd.qcut(rfm['frequency'], q=config.RFM_BINS, labels=[1, 2, 3, 4, 5], duplicates='drop')
+        except ValueError:
+            rfm['f_score'] = pd.cut(rfm['frequency'], 
+                                    bins=config.RFM_BINS, 
+                                    labels=[1, 2, 3, 4, 5], 
+                                    duplicates='drop',
+                                    include_lowest=True)
+        
+        try:
+            rfm['m_score'] = pd.qcut(rfm['monetary'], q=config.RFM_BINS, labels=[1, 2, 3, 4, 5], duplicates='drop')
+        except ValueError:
+            rfm['m_score'] = pd.cut(rfm['monetary'], 
+                                    bins=config.RFM_BINS, 
+                                    labels=[1, 2, 3, 4, 5], 
+                                    duplicates='drop',
+                                    include_lowest=True)
+        
+        # Convert to integer (handle NaN from dropped duplicates)
+        rfm['r_score'] = rfm['r_score'].fillna(3).astype(int)  # Default to middle score
+        rfm['f_score'] = rfm['f_score'].fillna(3).astype(int)
+        rfm['m_score'] = rfm['m_score'].fillna(3).astype(int)
+        
+        # Calculate combined RFM score
+        rfm['rfm_score'] = (
+            rfm['r_score'] * config.RECENCY_WEIGHT +
+            rfm['f_score'] * config.FREQUENCY_WEIGHT +
+            rfm['m_score'] * config.MONETARY_WEIGHT
+        )
+        
+        # Create RFM segment string
+        rfm['rfm_segment'] = (
+            rfm['r_score'].astype(str) +
+            rfm['f_score'].astype(str) +
+            rfm['m_score'].astype(str)
+        )
+        
+        self.rfm_data = rfm
+        return rfm
+    
+    def segment_customers(self) -> pd.DataFrame:
+        """
+        Segment customers into meaningful groups based on purchase behavior.
+        
+        Simple, business-friendly segmentation:
+        - New Customers: Only 1 purchase, recent
+        - Potential Customers: 2-5 purchases
+        - Champions: 6+ purchases, recent activity
+        - Loyal Customers: 6+ purchases, moderate recency
+        - At Risk: 6+ purchases, but inactive (30-90 days)
+        - Lost Customers: Inactive for 90+ days
+        - Churned: Previously good customers, now inactive
+        """
+        if self.rfm_data is None:
+            self.calculate_rfm()
+        
+        rfm = self.rfm_data.copy()
+        
+        def assign_segment(row):
+            frequency = row['frequency']
+            recency = row['recency']
+            monetary = row['monetary']
+            
+            # New Customers: Only purchased once
+            if frequency == 1:
+                if recency <= 30:
+                    return 'New Customers'
+                elif recency <= 90:
+                    return 'New (At Risk)'
+                else:
+                    return 'Lost (New)'
+            
+            # Potential Customers: 2-5 purchases
+            elif 2 <= frequency <= 5:
+                if recency <= 30:
+                    return 'Potential Customers'
+                elif recency <= 90:
+                    return 'Potential (Need Attention)'
+                else:
+                    return 'Churned (Potential)'
+            
+            # High frequency customers (6+ purchases)
+            else:  # frequency >= 6
+                if recency <= 30:
+                    return 'Champions'
+                elif recency <= 60:
+                    return 'Loyal Customers'
+                elif recency <= 90:
+                    return 'At Risk'
+                else:
+                    return 'Lost Customers'
+        
+        rfm['segment'] = rfm.apply(assign_segment, axis=1)
+        
+        self.rfm_data = rfm
+        return rfm
+    
+    def get_segment_summary(self) -> pd.DataFrame:
+        """Get summary statistics for each customer segment."""
+        if self.rfm_data is None or 'segment' not in self.rfm_data.columns:
+            self.segment_customers()
+        
+        segment_summary = self.rfm_data.groupby('segment').agg({
+            'customer_name': 'count',
+            'recency': 'mean',
+            'frequency': 'mean',
+            'monetary': 'mean',
+            'rfm_score': 'mean'
+        }).reset_index()
+        
+        segment_summary.columns = [
+            'segment', 'customer_count', 'avg_recency', 'avg_frequency',
+            'avg_monetary', 'avg_rfm_score'
+        ]
+        
+        # Calculate percentage of total customers
+        total_customers = segment_summary['customer_count'].sum()
+        segment_summary['customer_pct'] = (
+            segment_summary['customer_count'] / total_customers * 100
+        ).round(2)
+        
+        # Calculate revenue contribution
+        segment_revenue = self.rfm_data.groupby('segment')['monetary'].sum().reset_index()
+        segment_revenue.columns = ['segment', 'total_revenue']
+        segment_summary = segment_summary.merge(segment_revenue, on='segment')
+        
+        total_revenue = segment_summary['total_revenue'].sum()
+        segment_summary['revenue_pct'] = (
+            segment_summary['total_revenue'] / total_revenue * 100
+        ).round(2)
+        
+        # Sort by revenue contribution
+        segment_summary = segment_summary.sort_values('total_revenue', ascending=False)
+        
+        return segment_summary
+    
+    def get_customers_by_segment(self, segment: str) -> pd.DataFrame:
+        """Get list of customers in a specific segment."""
+        if self.rfm_data is None or 'segment' not in self.rfm_data.columns:
+            self.segment_customers()
+        
+        customers = self.rfm_data[self.rfm_data['segment'] == segment].copy()
+        customers = customers.sort_values('monetary', ascending=False)
+        
+        return customers[
+            ['customer_name', 'recency', 'frequency', 'monetary', 
+             'r_score', 'f_score', 'm_score', 'rfm_score']
+        ]
+    
+    def get_vip_customers(self, n: int = 20) -> pd.DataFrame:
+        """Identify VIP customers (Champions and Cannot Lose Them)."""
+        if self.rfm_data is None or 'segment' not in self.rfm_data.columns:
+            self.segment_customers()
+        
+        vip_segments = ['Champions', 'Cannot Lose Them', 'Loyal Customers']
+        vip = self.rfm_data[self.rfm_data['segment'].isin(vip_segments)].copy()
+        vip = vip.sort_values('monetary', ascending=False).head(n)
+        
+        return vip[
+            ['customer_name', 'segment', 'recency', 'frequency', 'monetary', 'rfm_score']
+        ]
+    
+    def get_at_risk_customers(self) -> pd.DataFrame:
+        """Identify at-risk customers who need immediate attention."""
+        if self.rfm_data is None or 'segment' not in self.rfm_data.columns:
+            self.segment_customers()
+        
+        at_risk_segments = ['At Risk', 'Cannot Lose Them', 'About to Sleep']
+        at_risk = self.rfm_data[self.rfm_data['segment'].isin(at_risk_segments)].copy()
+        at_risk = at_risk.sort_values('monetary', ascending=False)
+        
+        return at_risk[
+            ['customer_name', 'segment', 'recency', 'frequency', 'monetary', 'rfm_score']
+        ]
+    
+    def cluster_customers_kmeans(self, n_clusters: int = 4) -> pd.DataFrame:
+        """
+        Perform K-means clustering on RFM data.
+        
+        Args:
+            n_clusters: Number of clusters to create
+        """
+        if self.rfm_data is None:
+            self.calculate_rfm()
+        
+        # Prepare features for clustering
+        features = self.rfm_data[['recency', 'frequency', 'monetary']].values
+        
+        # Standardize features
+        scaler = StandardScaler()
+        features_scaled = scaler.fit_transform(features)
+        
+        # Perform K-means clustering
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        self.rfm_data['cluster'] = kmeans.fit_predict(features_scaled)
+        
+        # Calculate cluster centers in original scale
+        cluster_centers = scaler.inverse_transform(kmeans.cluster_centers_)
+        
+        cluster_info = []
+        for i in range(n_clusters):
+            cluster_data = self.rfm_data[self.rfm_data['cluster'] == i]
+            cluster_info.append({
+                'cluster': i,
+                'size': len(cluster_data),
+                'avg_recency': cluster_centers[i][0],
+                'avg_frequency': cluster_centers[i][1],
+                'avg_monetary': cluster_centers[i][2],
+                'total_revenue': cluster_data['monetary'].sum()
+            })
+        
+        cluster_summary = pd.DataFrame(cluster_info)
+        
+        return self.rfm_data, cluster_summary
+    
+    def get_transition_matrix(self, previous_rfm: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate customer segment transition matrix.
+        
+        Args:
+            previous_rfm: RFM data from previous period with segments
+        """
+        if self.rfm_data is None or 'segment' not in self.rfm_data.columns:
+            self.segment_customers()
+        
+        # Merge current and previous segments
+        transition = previous_rfm[['customer_name', 'segment']].merge(
+            self.rfm_data[['customer_name', 'segment']],
+            on='customer_name',
+            suffixes=('_previous', '_current')
+        )
+        
+        # Create transition matrix
+        transition_matrix = pd.crosstab(
+            transition['segment_previous'],
+            transition['segment_current'],
+            normalize='index'
+        ) * 100
+        
+        return transition_matrix.round(2)
+    
+    def recommend_actions(self, segment: str) -> Dict:
+        """
+        Recommend marketing actions for each customer segment.
+        
+        Args:
+            segment: Customer segment name
+        """
+        recommendations = {
+            'New Customers': {
+                'priority': 'Medium',
+                'actions': [
+                    'Welcome email with discount for 2nd purchase',
+                    'Introduce them to product categories',
+                    'Ask for feedback on first experience',
+                    'Offer personalized product recommendations'
+                ],
+                'goal': 'Convert to repeat customers'
+            },
+            'New (At Risk)': {
+                'priority': 'Medium-High',
+                'actions': [
+                    'Send reminder about their first purchase',
+                    'Offer special discount to encourage 2nd purchase',
+                    'Highlight products they might need',
+                    'Ask if they need any assistance'
+                ],
+                'goal': 'Re-engage before they become lost'
+            },
+            'Lost (New)': {
+                'priority': 'Low',
+                'actions': [
+                    'One-time win-back offer',
+                    'Survey to understand why they didn\'t return',
+                    'Learn and improve from feedback'
+                ],
+                'goal': 'Understand barriers and improve'
+            },
+            'Potential Customers': {
+                'priority': 'High',
+                'actions': [
+                    'Nurture with personalized offers',
+                    'Recommend complementary products',
+                    'Offer loyalty incentives',
+                    'Provide excellent customer service',
+                    'Encourage more frequent purchases'
+                ],
+                'goal': 'Grow into Champions'
+            },
+            'Potential (Need Attention)': {
+                'priority': 'High',
+                'actions': [
+                    'Re-engagement campaign with special offers',
+                    'Remind them of products they liked',
+                    'Ask for feedback',
+                    'Time-sensitive promotions'
+                ],
+                'goal': 'Prevent from churning'
+            },
+            'Churned (Potential)': {
+                'priority': 'Medium',
+                'actions': [
+                    'Win-back campaign with significant incentives',
+                    'Survey to understand why they left',
+                    'Show what\'s new since they left',
+                    'Personalized outreach'
+                ],
+                'goal': 'Reactivate and rebuild relationship'
+            },
+            'Champions': {
+                'priority': 'Very High',
+                'actions': [
+                    'VIP treatment and exclusive benefits',
+                    'Request reviews and referrals',
+                    'Early access to new products',
+                    'Personalized thank you messages',
+                    'Special rewards and recognition'
+                ],
+                'goal': 'Maintain loyalty and advocacy'
+            },
+            'Loyal Customers': {
+                'priority': 'High',
+                'actions': [
+                    'Regular engagement and appreciation',
+                    'Loyalty rewards program',
+                    'Cross-sell and upsell opportunities',
+                    'Ask for product feedback',
+                    'Keep them engaged'
+                ],
+                'goal': 'Maintain engagement and prevent decline'
+            },
+            'At Risk': {
+                'priority': 'Urgent',
+                'actions': [
+                    'IMMEDIATE personalized outreach',
+                    'Generous win-back offers',
+                    'Call or personal message from staff',
+                    'Understand if there are any issues',
+                    'Show them they are valued'
+                ],
+                'goal': 'Prevent loss of valuable customers'
+            },
+            'Lost Customers': {
+                'priority': 'Medium',
+                'actions': [
+                    'Major win-back campaign',
+                    'Survey to understand reasons',
+                    'Significant incentive to return',
+                    'Show improvements made',
+                    'Limited-time offer'
+                ],
+                'goal': 'Reactivate if cost-effective'
+            }
+        }
+        
+        return recommendations.get(segment, {
+            'priority': 'Medium',
+            'actions': ['Analyze customer behavior', 'Provide personalized service'],
+            'goal': 'Understand and serve customer needs'
+        })
+
