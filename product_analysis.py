@@ -31,20 +31,38 @@ class ProductAnalyzer:
         sales_data = self.data[~self.data['is_refund']]
         refunds_data = self.data[self.data['is_refund']]
         
-        # Calculate sales metrics
-        product_stats = sales_data.groupby(['item_code', 'item_name', 'category']).agg({
+        # Calculate sales metrics (include units and pieces if available)
+        agg_dict = {
             'order_id': 'nunique',
             'quantity': 'sum',
             'total': 'sum',
             'customer_name': 'nunique',
             'date': ['min', 'max']
-        }).reset_index()
+        }
         
-        # Flatten column names
-        product_stats.columns = [
-            'item_code', 'item_name', 'category', 'orders', 'quantity_sold',
-            'gross_revenue', 'unique_customers', 'first_sale', 'last_sale'
-        ]
+        # Add units and pieces if they exist
+        if 'units' in sales_data.columns:
+            agg_dict['units'] = 'sum'
+        if 'pieces' in sales_data.columns:
+            agg_dict['pieces'] = 'sum'
+        
+        product_stats = sales_data.groupby(['item_code', 'item_name', 'category']).agg(agg_dict).reset_index()
+        
+        # Flatten column names - they come out in the order they're in the dict
+        # Order after groupby: order_id, quantity, total, customer_name, date(min), date(max), units*, pieces*
+        # * = optional, added at the end if they exist
+        
+        col_names = ['item_code', 'item_name', 'category', 'orders', 'quantity_sold', 
+                    'gross_revenue', 'unique_customers', 'first_sale', 'last_sale']
+        
+        # Units and pieces were added AFTER date in the dict, so they come at the END
+        if 'units' in agg_dict:
+            col_names.append('units_sold')
+        
+        if 'pieces' in agg_dict:
+            col_names.append('pieces_sold')
+        
+        product_stats.columns = col_names
         
         # Calculate refund metrics per product
         product_refunds = refunds_data.groupby(['item_code', 'item_name', 'category']).agg({
@@ -139,10 +157,24 @@ class ProductAnalyzer:
         # Filter products that have been on market for at least 7 days
         product_stats = product_stats[product_stats['days_on_market'] >= 7]
         
-        fast_movers = product_stats.nlargest(n, 'sales_velocity')[
-            ['item_code', 'item_name', 'category', 'sales_velocity', 
-             'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue', 'orders', 'last_sale']
-        ]
+        # Select columns based on what's available
+        base_cols = ['item_code', 'item_name', 'category', 'sales_velocity', 
+                     'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue', 'orders', 'last_sale']
+        
+        # Add units_sold and pieces_sold if they exist
+        display_cols = []
+        for col in base_cols:
+            if col == 'quantity_sold':
+                if 'units_sold' in product_stats.columns:
+                    display_cols.append('units_sold')
+                if 'pieces_sold' in product_stats.columns:
+                    display_cols.append('pieces_sold')
+            display_cols.append(col)
+        
+        # Filter to only existing columns
+        display_cols = [col for col in display_cols if col in product_stats.columns]
+        
+        fast_movers = product_stats.nlargest(n, 'sales_velocity')[display_cols]
         
         return fast_movers
     
@@ -153,10 +185,24 @@ class ProductAnalyzer:
         # Filter products that have been on market for at least 30 days
         product_stats = product_stats[product_stats['days_on_market'] >= 30]
         
-        slow_movers = product_stats.nsmallest(n, 'sales_velocity')[
-            ['item_code', 'item_name', 'category', 'sales_velocity',
-             'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue', 'days_since_last_sale', 'last_sale']
-        ]
+        # Select columns based on what's available
+        base_cols = ['item_code', 'item_name', 'category', 'sales_velocity',
+                     'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue', 'days_since_last_sale', 'last_sale']
+        
+        # Add units_sold and pieces_sold if they exist
+        display_cols = []
+        for col in base_cols:
+            if col == 'quantity_sold':
+                if 'units_sold' in product_stats.columns:
+                    display_cols.append('units_sold')
+                if 'pieces_sold' in product_stats.columns:
+                    display_cols.append('pieces_sold')
+            display_cols.append(col)
+        
+        # Filter to only existing columns
+        display_cols = [col for col in display_cols if col in product_stats.columns]
+        
+        slow_movers = product_stats.nsmallest(n, 'sales_velocity')[display_cols]
         
         return slow_movers
     

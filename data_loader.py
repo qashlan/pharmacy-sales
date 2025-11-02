@@ -155,25 +155,31 @@ class DataLoader:
         """
         Process units, pieces, and quantity columns.
         
-        Column Types:
-        - Units: Integer - number of full units sold
-        - Pieces: Always INTEGER - number of pieces
-        - Quantity: Can be FRACTIONAL (0.50, 0.80, etc.) - actual quantity sold
+        Understanding Units, Pieces, and Quantity:
+        ==========================================
+        - **Units**: Full units/boxes (integer) - informational
+        - **Pieces**: Loose pieces (integer) - informational  
+        - **Quantity**: Total effective quantity (can be fractional) - AUTHORITATIVE ⭐
         
-        Logic:
-        - If 'quantity' column exists in the data, use it as the actual quantity sold (can be fractional)
-        - Otherwise, calculate quantity from units and pieces:
+        Real-World Examples:
+        -------------------
+        1. Units=1, Pieces=1, Quantity=1.50
+           → Sold 1 full unit + 1 loose piece = 1.50 units total
+        
+        2. Units=0, Pieces=1, Quantity=0.50
+           → Sold only 1 loose piece = 0.50 units total
+        
+        3. Units=2, Pieces=0, Quantity=2.00
+           → Sold 2 full units = 2.00 units total
+        
+        Processing Logic:
+        ----------------
+        - If 'quantity' column exists → Use it as authoritative (can be fractional)
+        - If 'quantity' missing → Calculate from units and pieces (legacy):
           * If pieces > 0, use pieces as quantity
           * Otherwise, use units as quantity
         
-        Examples with Quantity column:
-        - Units=0, Pieces=0, Quantity=0.50 → Use Quantity=0.50 (half unit sold)
-        - Units=0, Pieces=0, Quantity=0.80 → Use Quantity=0.80 (0.8 units sold)
-        - Units=1, Pieces=10, Quantity=1 → Use Quantity=1
-        
-        Examples without Quantity column (legacy/calculated):
-        - Units=1, Pieces=0 → quantity = 1
-        - Units=0, Pieces=4 → quantity = 4
+        All calculations in the system use **Quantity** as the measure of items sold.
         """
         # Ensure numeric types for units (always integer)
         if 'units' in df.columns:

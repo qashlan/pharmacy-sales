@@ -30,6 +30,7 @@ for directory in [DATA_DIR, OUTPUT_DIR, REPORTS_DIR, CHARTS_DIR]:
 COLUMN_MAPPING = {
     'Item Code': 'item_code',
     'Item Name': 'item_name',
+    'Iten Name': 'item_name',  # Handle typo in inventory files
     'Units': 'units',
     'Pieces': 'pieces',
     'Quantity': 'quantity',
@@ -42,6 +43,14 @@ COLUMN_MAPPING = {
     'Category': 'category',
     'Receipt': 'receipt'
 }
+
+# Inventory management settings
+INVENTORY_FILE_PATH = BASE_DIR / "data" / "inventory.xlsx"
+LEAD_TIME_DAYS = 7  # Default lead time for reordering
+SAFETY_STOCK_FACTOR = 1.5  # Safety stock multiplier
+URGENCY_THRESHOLD_DAYS = 3  # Days threshold for urgent reorders
+OVERSTOCK_THRESHOLD_DAYS = 180  # Days of stock to consider overstock
+STOCKOUT_FORECAST_DAYS = 30  # Days to forecast stockout risk
 
 # Analysis parameters
 RECENCY_WEIGHT = 1.0
@@ -84,6 +93,7 @@ TRANSLATIONS = {
         'sales_analysis': 'Sales Analysis',
         'customer_insights': 'Customer Insights',
         'product_performance': 'Product Performance',
+        'inventory_management': 'Inventory Management',
         'rfm_segmentation': 'RFM Segmentation',
         'refill_prediction': 'Refill Prediction',
         'cross_sell_analysis': 'Cross-Sell Analysis',
@@ -386,7 +396,7 @@ TRANSLATIONS = {
         
         # AI Query Assistant
         'ai_query_title': 'AI Query Assistant',
-        'ai_query_description': 'Ask questions about your sales data in plain English. The AI will analyze your data and provide insights.',
+        'ai_query_description': 'Ask questions about your sales data in plain English. The AI will analyze your data and answer your questions. Use the chat for follow-up discussions.',
         'gpt_enhanced': '✨ GPT Enhanced',
         'pattern_matching': '🔧 Pattern Matching',
         'gpt_caption': 'Using OpenAI for intelligent query interpretation and insights generation',
@@ -446,6 +456,54 @@ TRANSLATIONS = {
         'count': 'Count',
         'class': 'Class',
         'regularity': 'Regularity',
+        
+        # Inventory Management
+        'inventory_title': 'Inventory Management & Reorder Signals',
+        'inventory_description': 'Monitor stock levels and get intelligent reorder recommendations based on sales velocity.',
+        'upload_inventory': 'Upload Inventory File',
+        'use_sample_inventory': 'Use Sample Inventory',
+        'inventory_file_info': 'Upload an Excel or CSV file with columns: Item Code, Item Name, Selling Price, Units, Pieces, Quantity, Category',
+        'inventory_overview': 'Inventory Overview',
+        'reorder_alerts': 'Reorder Alerts',
+        'stockout_risk': 'Stockout Risk',
+        'overstocked_items': 'Overstocked Items',
+        'category_analysis': 'Category Analysis',
+        'total_items': 'Total Items',
+        'items_in_stock': 'Items in Stock',
+        'inventory_value': 'Inventory Value',
+        'out_of_stock': 'Out of Stock',
+        'urgent_reorder': 'Urgent Reorder',
+        'reorder_soon': 'Reorder Soon',
+        'monitor': 'Monitor',
+        'items_ok': 'Items OK',
+        'avg_days_stock': 'Avg Days of Stock',
+        'fast_movers': 'Fast Movers',
+        'slow_movers': 'Slow Movers',
+        'items_no_sales': 'No Sales History',
+        'reorder_recommendations': 'Reorder Recommendations',
+        'filter_by_signal': 'Filter by Signal',
+        'all_items': 'All Items',
+        'current_stock': 'Current Stock',
+        'reorder_point': 'Reorder Point',
+        'safety_stock': 'Safety Stock',
+        'days_of_stock': 'Days of Stock',
+        'daily_velocity': 'Daily Velocity',
+        'order_quantity': 'Order Quantity',
+        'priority': 'Priority',
+        'stockout_forecast': 'Stockout Forecast ({days} Days)',
+        'predicted_stockout': 'Predicted Stockout',
+        'estimated_date': 'Estimated Date',
+        'potential_lost_revenue': 'Potential Lost Revenue',
+        'overstock_analysis': 'Overstock Analysis',
+        'overstock_value': 'Overstock Value',
+        'lead_time_days': 'Lead Time (Days)',
+        'urgency_days': 'Urgency Threshold (Days)',
+        'abc_inventory_analysis': 'ABC Inventory Analysis',
+        'download_reorder_list': 'Download Reorder List',
+        'inventory_by_category': 'Inventory by Category',
+        'stock_on_hand': 'Stock on Hand',
+        'inventory_turnover': 'Inventory Turnover',
+        'reorder_settings': 'Reorder Settings',
     },
     'ar': {
         # Main navigation
@@ -460,6 +518,7 @@ TRANSLATIONS = {
         'sales_analysis': 'تحليل المبيعات',
         'customer_insights': 'رؤى العملاء',
         'product_performance': 'أداء المنتجات',
+        'inventory_management': 'إدارة المخزون',
         'rfm_segmentation': 'تصنيف العملاء',
         'refill_prediction': 'توقع إعادة الشراء',
         'cross_sell_analysis': 'البيع المتقاطع',
@@ -762,7 +821,7 @@ TRANSLATIONS = {
         
         # AI Query Assistant
         'ai_query_title': 'مساعد الاستعلام بالذكاء الاصطناعي',
-        'ai_query_description': 'اطرح أسئلة حول بيانات مبيعاتك بالعربية البسيطة. سيقوم الذكاء الاصطناعي بتحليل بياناتك وتوفير الرؤى.',
+        'ai_query_description': 'اطرح أسئلة حول بيانات مبيعاتك بالعربية البسيطة. سيقوم الذكاء الاصطناعي بتحليل بياناتك والإجابة على أسئلتك. استخدم المحادثة للأسئلة المتابعة.',
         'gpt_enhanced': '✨ محسّن بـ GPT',
         'pattern_matching': '🔧 مطابقة الأنماط',
         'gpt_caption': 'استخدام OpenAI لتفسير الاستعلام الذكي وتوليد الرؤى',
@@ -822,6 +881,54 @@ TRANSLATIONS = {
         'count': 'العدد',
         'class': 'الفئة',
         'regularity': 'الانتظام',
+        
+        # Inventory Management
+        'inventory_title': 'إدارة المخزون وإشارات إعادة الطلب',
+        'inventory_description': 'راقب مستويات المخزون واحصل على توصيات ذكية لإعادة الطلب بناءً على سرعة المبيعات.',
+        'upload_inventory': 'رفع ملف المخزون',
+        'use_sample_inventory': 'استخدام مخزون عينة',
+        'inventory_file_info': 'قم بتحميل ملف Excel أو CSV مع الأعمدة: رمز الصنف، اسم الصنف، سعر البيع، الوحدات، القطع، الكمية، الفئة',
+        'inventory_overview': 'نظرة عامة على المخزون',
+        'reorder_alerts': 'تنبيهات إعادة الطلب',
+        'stockout_risk': 'خطر نفاد المخزون',
+        'overstocked_items': 'الأصناف الزائدة',
+        'category_analysis': 'تحليل الفئات',
+        'total_items': 'إجمالي الأصناف',
+        'items_in_stock': 'أصناف في المخزون',
+        'inventory_value': 'قيمة المخزون',
+        'out_of_stock': 'نفد من المخزون',
+        'urgent_reorder': 'إعادة طلب عاجلة',
+        'reorder_soon': 'إعادة طلب قريباً',
+        'monitor': 'مراقبة',
+        'items_ok': 'أصناف جيدة',
+        'avg_days_stock': 'متوسط أيام المخزون',
+        'fast_movers': 'سريعة الحركة',
+        'slow_movers': 'بطيئة الحركة',
+        'items_no_sales': 'بدون تاريخ مبيعات',
+        'reorder_recommendations': 'توصيات إعادة الطلب',
+        'filter_by_signal': 'تصفية حسب الإشارة',
+        'all_items': 'كل الأصناف',
+        'current_stock': 'المخزون الحالي',
+        'reorder_point': 'نقطة إعادة الطلب',
+        'safety_stock': 'مخزون الأمان',
+        'days_of_stock': 'أيام المخزون',
+        'daily_velocity': 'السرعة اليومية',
+        'order_quantity': 'كمية الطلب',
+        'priority': 'الأولوية',
+        'stockout_forecast': 'توقع نفاد المخزون ({days} يوم)',
+        'predicted_stockout': 'نفاد متوقع',
+        'estimated_date': 'التاريخ المقدر',
+        'potential_lost_revenue': 'الإيرادات المحتملة المفقودة',
+        'overstock_analysis': 'تحليل المخزون الزائد',
+        'overstock_value': 'قيمة المخزون الزائد',
+        'lead_time_days': 'مدة التوريد (أيام)',
+        'urgency_days': 'عتبة الاستعجال (أيام)',
+        'abc_inventory_analysis': 'تحليل ABC للمخزون',
+        'download_reorder_list': 'تحميل قائمة إعادة الطلب',
+        'inventory_by_category': 'المخزون حسب الفئة',
+        'stock_on_hand': 'المخزون المتاح',
+        'inventory_turnover': 'معدل دوران المخزون',
+        'reorder_settings': 'إعدادات إعادة الطلب',
     }
 }
 

@@ -15,6 +15,7 @@ from data_loader import DataLoader, load_sample_data
 from sales_analysis import SalesAnalyzer
 from customer_analysis import CustomerAnalyzer
 from product_analysis import ProductAnalyzer
+from inventory_management import InventoryManager, load_inventory_from_file, create_sample_inventory
 from rfm_analysis import RFMAnalyzer
 from refill_prediction import RefillPredictor
 from cross_sell_analysis import CrossSellAnalyzer
@@ -372,8 +373,22 @@ def sales_analysis_page(data):
         fig.update_xaxes(tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
         
-        # Data table
-        st.dataframe(format_datetime_columns(top_products), use_container_width=True, hide_index=True)
+        # Data table with renamed columns
+        top_products_display = top_products.copy()
+        column_renames = {
+            'item_code': 'Item Code',
+            'item_name': 'Item Name',
+            'units': 'Units',
+            'pieces': 'Pieces',
+            'quantity': 'Quantity ⭐',
+            'revenue': 'Revenue',
+            'orders': 'Orders'
+        }
+        top_products_display = top_products_display.rename(columns={
+            k: v for k, v in column_renames.items() if k in top_products_display.columns
+        })
+        st.dataframe(format_datetime_columns(top_products_display), use_container_width=True, hide_index=True)
+        st.caption("⭐ Quantity is the total sold (Units and Pieces are informational)")
         
         # Top categories
         st.subheader(t('top_categories'))
@@ -696,23 +711,44 @@ def sales_analysis_page(data):
                     )
                     
                     # Display refund transactions
-                    display_columns = ['date', 'order_id', 'customer_name', 'item_name', 'quantity', 'total']
+                    display_columns = ['date', 'order_id', 'customer_name', 'item_name', 
+                                      'units', 'pieces', 'quantity', 'total']
+                    # Only include columns that exist
+                    display_columns = [col for col in display_columns if col in filtered_refunds.columns]
                     refund_display = filtered_refunds[display_columns].copy()
-                    refund_display['total'] = refund_display['total'].abs()  # Show as positive for readability
+                    
+                    # Convert to positive values for readability
+                    if 'total' in refund_display.columns:
+                        refund_display['total'] = refund_display['total'].abs()
+                    if 'quantity' in refund_display.columns:
+                        refund_display['quantity'] = refund_display['quantity'].abs()
+                    if 'units' in refund_display.columns:
+                        refund_display['units'] = refund_display['units'].abs()
+                    if 'pieces' in refund_display.columns:
+                        refund_display['pieces'] = refund_display['pieces'].abs()
+                    
                     refund_display = refund_display.sort_values('date', ascending=False)
+                    
+                    # Rename columns
+                    column_renames = {
+                        'date': t('date'),
+                        'order_id': 'Order ID',
+                        'customer_name': 'Customer',
+                        'item_name': 'Product',
+                        'units': 'Units',
+                        'pieces': 'Pieces',
+                        'quantity': 'Quantity ⭐',
+                        'total': t('refund_amount')
+                    }
                     
                     st.dataframe(
                         format_datetime_columns(refund_display.rename(columns={
-                            'date': t('date'),
-                            'order_id': t('order_id'),
-                            'customer_name': t('customer'),
-                            'item_name': t('product'),
-                            'quantity': t('quantity'),
-                            'total': t('refund_amount')
+                            k: v for k, v in column_renames.items() if k in refund_display.columns
                         })),
                         use_container_width=True,
                         hide_index=True
                     )
+                    st.caption("⭐ Quantity = total units refunded (Units and Pieces show breakdown if available)")
                     
                     # Download button
                     csv = refund_display.to_csv(index=False).encode('utf-8')
@@ -1045,8 +1081,8 @@ def product_analysis_page(data):
     
     st.markdown("---")
     
-    tab1, tab2, tab3, tab4 = st.tabs([
-        f"🏃 {t('fast_slow_movers')}", f"📊 {t('abc_analysis')}", f"🔄 {t('lifecycle')}", f"📈 {t('inventory_signals')}"
+    tab1, tab2, tab3 = st.tabs([
+        f"🏃 {t('fast_slow_movers')}", f"📊 {t('abc_analysis')}", f"🔄 {t('lifecycle')}"
     ])
     
     with tab1:
@@ -1085,7 +1121,25 @@ def product_analysis_page(data):
             if len(fast_movers) > 0:
                 # Format the dataframe for better display
                 fast_movers_display = fast_movers.copy()
+                
+                # Rename columns for clarity
+                column_renames = {
+                    'item_code': 'Item Code',
+                    'item_name': 'Item Name',
+                    'category': 'Category',
+                    'units_sold': 'Units Sold',
+                    'pieces_sold': 'Pieces Sold',
+                    'quantity_sold': 'Quantity Sold ⭐',
+                    'revenue': 'Revenue',
+                    'orders': 'Orders',
+                    'days_since_last_sale': 'Days Since Last Sale'
+                }
+                fast_movers_display = fast_movers_display.rename(columns={
+                    k: v for k, v in column_renames.items() if k in fast_movers_display.columns
+                })
+                
                 st.dataframe(format_datetime_columns(fast_movers_display), use_container_width=True, hide_index=True)
+                st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
                 
                 # Quick stats with refund info
                 total_fast_revenue = fast_movers['revenue'].sum()
@@ -1112,7 +1166,25 @@ def product_analysis_page(data):
             if len(slow_movers) > 0:
                 # Format the dataframe for better display
                 slow_movers_display = slow_movers.copy()
+                
+                # Rename columns for clarity
+                column_renames = {
+                    'item_code': 'Item Code',
+                    'item_name': 'Item Name',
+                    'category': 'Category',
+                    'units_sold': 'Units Sold',
+                    'pieces_sold': 'Pieces Sold',
+                    'quantity_sold': 'Quantity Sold ⭐',
+                    'revenue': 'Revenue',
+                    'orders': 'Orders',
+                    'days_since_last_sale': 'Days Since Last Sale'
+                }
+                slow_movers_display = slow_movers_display.rename(columns={
+                    k: v for k, v in column_renames.items() if k in slow_movers_display.columns
+                })
+                
                 st.dataframe(format_datetime_columns(slow_movers_display), use_container_width=True, hide_index=True)
+                st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
                 
                 # Quick stats with refund info
                 total_slow_revenue = slow_movers['revenue'].sum()
@@ -1201,8 +1273,26 @@ def product_analysis_page(data):
             ['A', 'B', 'C'],
             default=['A']
         )
-        filtered_abc = abc_data[abc_data['abc_class'].isin(class_filter)]
+        filtered_abc = abc_data[abc_data['abc_class'].isin(class_filter)].copy()
+        
+        # Rename columns for clarity
+        column_renames = {
+            'item_code': 'Item Code',
+            'item_name': 'Item Name',
+            'category': 'Category',
+            'abc_class': 'ABC Class',
+            'units_sold': 'Units Sold',
+            'pieces_sold': 'Pieces Sold',
+            'quantity_sold': 'Quantity Sold ⭐',
+            'revenue': 'Revenue',
+            'cumulative_revenue_pct': 'Cumulative Revenue %'
+        }
+        filtered_abc = filtered_abc.rename(columns={
+            k: v for k, v in column_renames.items() if k in filtered_abc.columns
+        })
+        
         st.dataframe(format_datetime_columns(filtered_abc), use_container_width=True, hide_index=True)
+        st.caption("⭐ Quantity Sold = total units sold (ABC classification based on revenue)")
     
     with tab3:
         st.subheader("Product Lifecycle Stages")
@@ -1232,50 +1322,463 @@ def product_analysis_page(data):
             )
             st.plotly_chart(fig, use_container_width=True)
         
-        st.dataframe(format_datetime_columns(lifecycle), use_container_width=True, hide_index=True)
+        # Rename columns for clarity
+        lifecycle_display = lifecycle.copy()
+        column_renames = {
+            'item_code': 'Item Code',
+            'item_name': 'Item Name',
+            'category': 'Category',
+            'lifecycle_stage': 'Lifecycle Stage',
+            'units_sold': 'Units Sold',
+            'pieces_sold': 'Pieces Sold',
+            'quantity_sold': 'Quantity Sold ⭐',
+            'revenue': 'Revenue',
+            'days_since_last_sale': 'Days Since Last Sale'
+        }
+        lifecycle_display = lifecycle_display.rename(columns={
+            k: v for k, v in column_renames.items() if k in lifecycle_display.columns
+        })
+        
+        st.dataframe(format_datetime_columns(lifecycle_display), use_container_width=True, hide_index=True)
+        st.caption("⭐ Quantity Sold = total units sold (lifecycle stage based on sales trends)")
+
+
+def inventory_management_page(data):
+    """Inventory management and reorder signals section."""
+    st.header(f"📦 {t('inventory_title')}")
+    st.markdown(t('inventory_description'))
+    st.markdown("---")
     
-    with tab4:
-        st.subheader("Inventory Planning Signals")
-        
-        signals = analyzer.get_inventory_planning_signals()
-        
-        # Summary by signal type
-        signal_summary = signals['inventory_signal'].value_counts()
-        
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.write("**Signal Summary**")
-            for signal, count in signal_summary.items():
-                if 'Reorder' in signal:
-                    st.info(f"{signal}: {count} products")
-                elif 'Overstock' in signal:
-                    st.warning(f"{signal}: {count} products")
-                elif 'Monitor' in signal:
-                    st.error(f"{signal}: {count} products")
+    # Initialize session state for inventory data
+    if 'inventory_data' not in st.session_state:
+        st.session_state.inventory_data = None
+    if 'inventory_manager' not in st.session_state:
+        st.session_state.inventory_manager = None
+    
+    # File upload section
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.subheader(f"📤 {t('upload_inventory')}")
+        st.info(t('inventory_file_info'))
+        uploaded_file = st.file_uploader(
+            "Choose inventory file", 
+            type=['csv', 'xlsx', 'xls'],
+            help="Upload your inventory file with product information"
+        )
+    
+    with col2:
+        st.write("")
+        st.write("")
+        if st.button(f"🎲 {t('use_sample_inventory')}", type="secondary"):
+            with st.spinner("Generating sample inventory..."):
+                st.session_state.inventory_data = create_sample_inventory(data)
+                st.success("✓ Sample inventory loaded!")
+    
+    # Load inventory data
+    if uploaded_file is not None:
+        try:
+            with st.spinner("Loading inventory file..."):
+                if uploaded_file.name.endswith('.csv'):
+                    inventory_df = pd.read_csv(uploaded_file)
                 else:
-                    st.success(f"{signal}: {count} products")
+                    inventory_df = pd.read_excel(uploaded_file)
+                st.session_state.inventory_data = inventory_df
+                st.success(f"✓ Loaded {len(inventory_df)} items from {uploaded_file.name}")
+        except Exception as e:
+            st.error(f"Error loading file: {str(e)}")
+            return
+    
+    # If no inventory data, show message and return
+    if st.session_state.inventory_data is None:
+        st.warning("Please upload an inventory file or use sample inventory to begin.")
         
-        with col2:
+        # Show example format
+        with st.expander("📋 Example Inventory File Format"):
+            st.info("**Important:** Quantity is the authoritative stock level. Units & Pieces are informational only.")
+            example_df = pd.DataFrame({
+                'Item Code': ['ITEM001', 'ITEM002', 'ITEM003'],
+                'Item Name': ['Paracetamol 500mg', 'Amoxicillin 250mg', 'Vitamin D3'],
+                'Selling Price': [10.50, 25.00, 15.75],
+                'Units': [1, 0, 3],
+                'Pieces': [1, 1, 0],
+                'Quantity': [1.50, 0.50, 3.00],
+                'Category': ['Pain Relief', 'Antibiotics', 'Vitamins']
+            })
+            st.dataframe(example_df, use_container_width=True)
+            st.caption("Example: ITEM001 has 1 unit + 1 piece = Quantity 1.50 | ITEM002 has 0 units + 1 piece = Quantity 0.50")
+        return
+    
+    # Create inventory manager
+    try:
+        manager = InventoryManager(st.session_state.inventory_data, data)
+        st.session_state.inventory_manager = manager
+    except Exception as e:
+        st.error(f"Error analyzing inventory: {str(e)}")
+        return
+    
+    # Settings in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(f"⚙️ {t('reorder_settings')}")
+    lead_time = st.sidebar.slider(
+        t('lead_time_days'),
+        min_value=1, max_value=30, value=config.LEAD_TIME_DAYS,
+        help="Number of days between ordering and receiving stock"
+    )
+    urgency_threshold = st.sidebar.slider(
+        t('urgency_days'),
+        min_value=1, max_value=14, value=config.URGENCY_THRESHOLD_DAYS,
+        help="Days threshold for urgent reorder alerts"
+    )
+    
+    # Get inventory summary
+    summary = manager.get_inventory_summary()
+    
+    # Display summary metrics
+    st.subheader(f"📊 {t('inventory_overview')}")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric(t('total_items'), f"{summary['total_items']:,}")
+        st.metric(t('items_in_stock'), f"{summary['total_items'] - summary['items_out_of_stock']:,}")
+    with col2:
+        st.metric(t('inventory_value'), f"${summary['total_inventory_value']:,.2f}")
+        st.metric(t('avg_days_stock'), f"{summary['avg_days_of_stock']:.1f}")
+    with col3:
+        st.metric(t('out_of_stock'), f"{summary['items_out_of_stock']:,}", delta=None, delta_color="inverse")
+        st.metric(t('urgent_reorder'), f"{summary['items_urgent_reorder']:,}", delta=None, delta_color="inverse")
+    with col4:
+        st.metric(t('reorder_soon'), f"{summary['items_reorder_soon']:,}")
+        st.metric(t('items_ok'), f"{summary['items_ok']:,}", delta=None, delta_color="normal")
+    
+    st.markdown("---")
+    
+    # Tabs for different views
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        f"⚠️ {t('reorder_alerts')}",
+        f"📉 {t('stockout_risk')}",
+        f"📈 {t('overstocked_items')}",
+        f"📊 {t('abc_inventory_analysis')}",
+        f"📁 {t('category_analysis')}"
+    ])
+    
+    with tab1:
+        st.subheader(f"⚠️ {t('reorder_recommendations')}")
+        
+        # Get reorder signals
+        reorder_df = manager.get_reorder_signals(
+            lead_time_days=lead_time,
+            urgency_threshold_days=urgency_threshold
+        )
+        
+        # Filter options
+        col1, col2 = st.columns([2, 3])
+        with col1:
+            signal_filter = st.selectbox(
+                t('filter_by_signal'),
+                ['All', 'OUT_OF_STOCK', 'URGENT_REORDER', 'REORDER_SOON', 'MONITOR', 'OK']
+            )
+        
+        if signal_filter != 'All':
+            filtered_df = reorder_df[reorder_df['reorder_signal'] == signal_filter].copy()
+        else:
+            filtered_df = reorder_df.copy()
+        
+        # Signal distribution chart
+        col1, col2 = st.columns(2)
+        with col1:
+            signal_counts = reorder_df['reorder_signal'].value_counts()
             fig = px.pie(
-                values=signal_summary.values,
-                names=signal_summary.index,
-                title='Inventory Signals Distribution'
+                values=signal_counts.values,
+                names=signal_counts.index,
+                title="Reorder Signal Distribution",
+                color_discrete_sequence=px.colors.qualitative.Set3
             )
             st.plotly_chart(fig, use_container_width=True)
         
-        # Filter by signal
-        signal_filter = st.selectbox(
-            "Filter by signal",
-            ['All'] + list(signals['inventory_signal'].unique())
+        with col2:
+            # Top items needing reorder
+            urgent_items = reorder_df[
+                reorder_df['reorder_signal'].isin(['OUT_OF_STOCK', 'URGENT_REORDER'])
+            ].head(10)
+            
+            if len(urgent_items) > 0:
+                fig = px.bar(
+                    urgent_items,
+                    x='quantity_to_order',
+                    y='item_name',
+                    title="Top 10 Items to Reorder (by Quantity)",
+                    labels={'quantity_to_order': 'Quantity to Order', 'item_name': 'Product'},
+                    orientation='h',
+                    color='reorder_signal',
+                    color_discrete_map={
+                        'OUT_OF_STOCK': '#dc3545',
+                        'URGENT_REORDER': '#fd7e14'
+                    }
+                )
+                fig.update_layout(yaxis={'categoryorder': 'total ascending'})
+                st.plotly_chart(fig, use_container_width=True)
+        
+        # Display table
+        st.markdown(f"### 📋 {t('reorder_recommendations')} ({len(filtered_df)} items)")
+        
+        # Build display columns - include Units, Pieces, and Quantity
+        display_cols = ['item_code', 'item_name', 'category', 'units', 'pieces', 'quantity', 
+                       'reorder_signal', 'reorder_point', 'days_of_stock', 'daily_sales_velocity', 
+                       'quantity_to_order', 'priority_score']
+        
+        # Select only columns that exist in the data
+        display_df = filtered_df[
+            [col for col in display_cols if col in filtered_df.columns]
+        ].copy()
+        
+        # Rename columns for display
+        column_renames = {
+            'item_code': 'Item Code',
+            'item_name': 'Item Name',
+            'category': 'Category',
+            'units': 'Units',
+            'pieces': 'Pieces',
+            'quantity': 'Quantity ⭐',  # Star to indicate this is the authoritative value
+            'reorder_signal': 'Signal',
+            'reorder_point': t('reorder_point'),
+            'days_of_stock': t('days_of_stock'),
+            'daily_sales_velocity': t('daily_velocity'),
+            'quantity_to_order': t('order_quantity'),
+            'priority_score': t('priority')
+        }
+        
+        # Apply column renames
+        display_df = display_df.rename(columns={
+            k: v for k, v in column_renames.items() if k in display_df.columns
+        })
+        
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True
         )
         
-        if signal_filter != 'All':
-            filtered_signals = signals[signals['inventory_signal'] == signal_filter]
-        else:
-            filtered_signals = signals
+        # Add explanation
+        st.info("⭐ **Quantity** is the authoritative stock level used for all calculations. Units & Pieces are informational.")
         
-        st.dataframe(format_datetime_columns(filtered_signals), use_container_width=True, hide_index=True)
+        # Download button
+        csv = filtered_df.to_csv(index=False)
+        st.download_button(
+            label=f"📥 {t('download_reorder_list')}",
+            data=csv,
+            file_name=f"reorder_list_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+    
+    with tab2:
+        st.subheader(t('stockout_forecast', days=config.STOCKOUT_FORECAST_DAYS))
+        
+        # Get stockout risk analysis
+        stockout_risk = manager.get_stockout_risk(forecast_days=config.STOCKOUT_FORECAST_DAYS)
+        
+        if len(stockout_risk) > 0:
+            st.warning(f"⚠️ {len(stockout_risk)} items at risk of stockout in the next {config.STOCKOUT_FORECAST_DAYS} days!")
+            
+            # Stockout timeline
+            stockout_risk['stockout_date'] = pd.to_datetime(stockout_risk['estimated_stockout_date'])
+            
+            fig = px.scatter(
+                stockout_risk.head(20),
+                x='stockout_date',
+                y='item_name',
+                size='daily_sales_velocity',
+                color='predicted_stockout_days',
+                title=f"Stockout Timeline (Next {config.STOCKOUT_FORECAST_DAYS} Days)",
+                labels={
+                    'stockout_date': t('estimated_date'),
+                    'item_name': 'Product',
+                    'predicted_stockout_days': 'Days Until Stockout',
+                    'daily_sales_velocity': t('daily_velocity')
+                },
+                color_continuous_scale='Reds'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display table
+            display_cols = ['item_name', 'category', 'units', 'pieces', 'quantity', 
+                          'predicted_stockout_days', 'estimated_stockout_date', 
+                          'daily_sales_velocity', 'potential_lost_revenue']
+            
+            display_df = stockout_risk[[col for col in display_cols if col in stockout_risk.columns]].copy()
+            
+            # Rename columns for clarity
+            column_renames = {
+                'item_name': 'Item Name',
+                'category': 'Category',
+                'units': 'Units',
+                'pieces': 'Pieces',
+                'quantity': 'Quantity ⭐',
+                'predicted_stockout_days': 'Days Until Stockout',
+                'estimated_stockout_date': 'Estimated Date',
+                'daily_sales_velocity': 'Daily Velocity',
+                'potential_lost_revenue': 'Potential Lost Revenue'
+            }
+            display_df = display_df.rename(columns={
+                k: v for k, v in column_renames.items() if k in display_df.columns
+            })
+            
+            # Format dates
+            if 'Estimated Date' in display_df.columns:
+                display_df['Estimated Date'] = pd.to_datetime(display_df['Estimated Date']).dt.strftime('%Y-%m-%d')
+            
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.caption("⭐ Quantity is the total stock used for stockout prediction")
+        else:
+            st.success(f"✓ No items at risk of stockout in the next {config.STOCKOUT_FORECAST_DAYS} days!")
+    
+    with tab3:
+        st.subheader(f"📈 {t('overstock_analysis')}")
+        
+        # Get overstocked items
+        overstocked = manager.get_overstocked_items(
+            overstock_threshold_days=config.OVERSTOCK_THRESHOLD_DAYS
+        )
+        
+        if len(overstocked) > 0:
+            st.info(f"ℹ️ {len(overstocked)} items have more than {config.OVERSTOCK_THRESHOLD_DAYS} days of stock")
+            
+            # Overstock value chart
+            if 'overstock_value' in overstocked.columns:
+                top_overstock = overstocked.head(15)
+                fig = px.bar(
+                    top_overstock,
+                    x='item_name',
+                    y='overstock_value',
+                    title="Top 15 Overstocked Items by Value",
+                    labels={'overstock_value': t('overstock_value'), 'item_name': 'Product'},
+                    color='days_of_stock',
+                    color_continuous_scale='Blues'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Display table
+            display_cols = ['item_name', 'category', 'units', 'pieces', 'quantity', 
+                          'days_of_stock', 'daily_sales_velocity', 'overstock_value']
+            
+            display_df = overstocked[[col for col in display_cols if col in overstocked.columns]].head(50)
+            
+            # Rename columns for clarity
+            column_renames = {
+                'item_name': 'Item Name',
+                'category': 'Category',
+                'units': 'Units',
+                'pieces': 'Pieces',
+                'quantity': 'Quantity ⭐',
+                'days_of_stock': 'Days of Stock',
+                'daily_sales_velocity': 'Daily Velocity',
+                'overstock_value': 'Overstock Value'
+            }
+            display_df = display_df.rename(columns={
+                k: v for k, v in column_renames.items() if k in display_df.columns
+            })
+            
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.caption("⭐ Quantity is the total stock - high Days of Stock indicates slow-moving items")
+        else:
+            st.success(f"✓ No overstocked items (>{config.OVERSTOCK_THRESHOLD_DAYS} days of stock)")
+    
+    with tab4:
+        st.subheader(f"📊 {t('abc_inventory_analysis')}")
+        
+        # Get ABC analysis
+        abc_df = manager.get_abc_analysis()
+        
+        # ABC distribution
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            abc_counts = abc_df['abc_class'].value_counts().sort_index()
+            fig = px.pie(
+                values=abc_counts.values,
+                names=abc_counts.index,
+                title="ABC Classification Distribution",
+                color_discrete_sequence=['#2ecc71', '#f39c12', '#e74c3c']
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            abc_revenue = abc_df.groupby('abc_class')['total_revenue'].sum().sort_index()
+            fig = px.bar(
+                x=abc_revenue.index,
+                y=abc_revenue.values,
+                title="Revenue by ABC Class",
+                labels={'x': 'ABC Class', 'y': t('revenue')},
+                color=abc_revenue.index,
+                color_discrete_sequence=['#2ecc71', '#f39c12', '#e74c3c']
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # ABC table
+        st.markdown("### ABC Classification Details")
+        display_cols = ['item_name', 'abc_class', 'units', 'pieces', 'quantity', 
+                       'total_revenue', 'cumulative_revenue_pct', 'total_quantity_sold']
+        
+        display_df = abc_df[[col for col in display_cols if col in abc_df.columns]].head(50)
+        
+        # Rename columns for clarity
+        column_renames = {
+            'item_name': 'Item Name',
+            'abc_class': 'ABC Class',
+            'units': 'Units',
+            'pieces': 'Pieces',
+            'quantity': 'Quantity ⭐',
+            'total_revenue': 'Total Revenue',
+            'cumulative_revenue_pct': 'Cumulative Revenue %',
+            'total_quantity_sold': 'Total Sold'
+        }
+        display_df = display_df.rename(columns={
+            k: v for k, v in column_renames.items() if k in display_df.columns
+        })
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.caption("⭐ Quantity shows current stock | Total Sold shows historical sales | ABC Class based on revenue")
+    
+    with tab5:
+        st.subheader(f"📁 {t('inventory_by_category')}")
+        
+        # Get category analysis
+        category_df = manager.get_category_analysis()
+        
+        if len(category_df) > 0:
+            # Category charts
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig = px.bar(
+                    category_df,
+                    x='category',
+                    y='stock_on_hand',
+                    title="Stock on Hand by Category",
+                    labels={'stock_on_hand': t('stock_on_hand'), 'category': t('category')},
+                    color='stock_on_hand',
+                    color_continuous_scale='Blues'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                fig = px.bar(
+                    category_df,
+                    x='category',
+                    y='inventory_turnover',
+                    title="Inventory Turnover by Category",
+                    labels={'inventory_turnover': t('inventory_turnover'), 'category': t('category')},
+                    color='inventory_turnover',
+                    color_continuous_scale='Greens'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Category table
+            st.dataframe(category_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Category information not available in inventory data")
 
 
 def rfm_analysis_page(data):
@@ -2240,19 +2743,6 @@ def ai_query_page(data):
                 st.session_state.chat_messages = []
                 engine.openai_assistant.clear_history()
                 st.rerun()
-    
-    # Automatic insights
-    st.markdown("---")
-    st.subheader("🎯 Automatic Insights")
-    
-    with st.spinner("Generating insights..."):
-        insights = engine.get_insights()
-        
-        if insights:
-            for insight in insights:
-                st.write(insight)
-        else:
-            st.info("No significant insights detected")
 
 
 def export_page(data):
@@ -2372,6 +2862,7 @@ def main():
         f"📊 {t('sales_analysis')}",
         f"👥 {t('customer_insights')}",
         f"📦 {t('product_performance')}",
+        f"📦 {t('inventory_management')}",
         f"🎯 {t('rfm_segmentation')}",
         f"💊 {t('refill_prediction')}",
         f"🔗 {t('cross_sell_analysis')}",
@@ -2399,6 +2890,7 @@ def main():
         sales_analysis_page,
         customer_analysis_page,
         product_analysis_page,
+        inventory_management_page,
         rfm_analysis_page,
         refill_prediction_page,
         cross_sell_page,

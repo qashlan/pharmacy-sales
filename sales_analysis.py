@@ -208,35 +208,65 @@ class SalesAnalyzer:
         """
         Get top products by specified metric.
         
+        Shows Units, Pieces, and Quantity for each product:
+        - Units: Full units/boxes sold (integer)
+        - Pieces: Loose pieces sold (integer)
+        - Quantity: Total effective quantity sold (can be fractional) ⭐
+        
         Args:
             n: Number of top products to return
             metric: 'revenue', 'quantity', or 'orders'
         """
+        # Determine which columns are available
+        agg_dict = {
+            'total': 'sum',
+            'quantity': 'sum',
+            'order_id': 'nunique'
+        }
+        
+        # Add units and pieces if they exist
+        if 'units' in self.data.columns:
+            agg_dict['units'] = 'sum'
+        if 'pieces' in self.data.columns:
+            agg_dict['pieces'] = 'sum'
+        
         if metric == 'revenue':
-            top = self.data.groupby(['item_code', 'item_name']).agg({
-                'total': 'sum',
-                'quantity': 'sum',
-                'order_id': 'nunique'
-            }).reset_index()
-            top.columns = ['item_code', 'item_name', 'revenue', 'quantity', 'orders']
+            top = self.data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
+            col_names = ['item_code', 'item_name', 'revenue', 'quantity', 'orders']
+            if 'units' in agg_dict:
+                col_names.insert(3, 'units')
+            if 'pieces' in agg_dict:
+                col_names.insert(4, 'pieces')
+            top.columns = col_names
             top = top.sort_values('revenue', ascending=False).head(n)
             
         elif metric == 'quantity':
-            top = self.data.groupby(['item_code', 'item_name']).agg({
-                'quantity': 'sum',
-                'total': 'sum',
-                'order_id': 'nunique'
-            }).reset_index()
-            top.columns = ['item_code', 'item_name', 'quantity', 'revenue', 'orders']
+            top = self.data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
+            col_names = ['item_code', 'item_name', 'quantity', 'revenue', 'orders']
+            if 'units' in agg_dict:
+                col_names.insert(2, 'units')
+            if 'pieces' in agg_dict:
+                col_names.insert(3, 'pieces')
+            top.columns = col_names
             top = top.sort_values('quantity', ascending=False).head(n)
             
         elif metric == 'orders':
-            top = self.data.groupby(['item_code', 'item_name']).agg({
-                'order_id': 'nunique',
-                'total': 'sum',
-                'quantity': 'sum'
-            }).reset_index()
-            top.columns = ['item_code', 'item_name', 'orders', 'revenue', 'quantity']
+            top = self.data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
+            col_names = ['item_code', 'item_name', 'orders', 'revenue', 'quantity']
+            if 'units' in agg_dict:
+                col_names.insert(3, 'units')
+            if 'pieces' in agg_dict:
+                col_names.insert(4, 'pieces')
+            # Reorder columns to match the agg_dict order
+            temp_names = ['item_code', 'item_name', 'revenue', 'quantity', 'orders']
+            if 'units' in agg_dict:
+                temp_names.insert(3, 'units')
+            if 'pieces' in agg_dict:
+                temp_names.insert(4, 'pieces')
+            top.columns = temp_names
+            # Reorder columns to final order
+            final_order = ['item_code', 'item_name', 'orders', 'units', 'pieces', 'quantity', 'revenue']
+            top = top[[col for col in final_order if col in top.columns]]
             top = top.sort_values('orders', ascending=False).head(n)
         
         return top
