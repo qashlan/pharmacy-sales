@@ -25,19 +25,39 @@ class RFMAnalyzer:
         
     def calculate_rfm(self) -> pd.DataFrame:
         """
-        Calculate RFM metrics for each customer.
+        Calculate RFM metrics for each customer with refund handling.
         
         Returns:
             DataFrame with Recency, Frequency, and Monetary values
         """
-        # Aggregate by customer
-        rfm = self.data.groupby('customer_name').agg({
+        # Use only sales data for frequency calculation (exclude refunds)
+        sales_data = self.data[~self.data['is_refund']]
+        
+        # Calculate Recency and Frequency from sales
+        rfm = sales_data.groupby('customer_name').agg({
             'date': lambda x: (self.current_date - x.max()).days,  # Recency
-            'order_id': 'nunique',  # Frequency
-            'total': 'sum'  # Monetary
+            'order_id': 'nunique'  # Frequency (only sales orders)
         }).reset_index()
         
-        rfm.columns = ['customer_name', 'recency', 'frequency', 'monetary']
+        rfm.columns = ['customer_name', 'recency', 'frequency']
+        
+        # Calculate Monetary value separately to handle refunds
+        # Monetary = Total Sales - Total Refunds (net spending)
+        customer_sales = sales_data.groupby('customer_name')['total'].sum().reset_index()
+        customer_sales.columns = ['customer_name', 'gross_spending']
+        
+        refunds_data = self.data[self.data['is_refund']]
+        customer_refunds = refunds_data.groupby('customer_name')['total'].sum().reset_index()
+        customer_refunds.columns = ['customer_name', 'refund_amount']
+        customer_refunds['refund_amount'] = abs(customer_refunds['refund_amount'])
+        
+        # Merge monetary data
+        rfm = rfm.merge(customer_sales, on='customer_name', how='left')
+        rfm = rfm.merge(customer_refunds, on='customer_name', how='left')
+        rfm['refund_amount'] = rfm['refund_amount'].fillna(0)
+        
+        # Calculate net monetary value
+        rfm['monetary'] = rfm['gross_spending'] - rfm['refund_amount']
         
         # Calculate RFM scores (1-5, where 5 is best)
         # Use try-except to handle cases with duplicate values

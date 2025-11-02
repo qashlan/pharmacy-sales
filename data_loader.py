@@ -61,8 +61,11 @@ class DataLoader:
         # Handle units and pieces
         df = self._process_quantities(df)
         
-        # Compute order IDs
-        df = self._compute_order_ids(df)
+        # Handle customer names (make optional)
+        df = self._process_customer_names(df)
+        
+        # Use receipt column as order_id or compute if not present
+        df = self._process_order_ids(df)
         
         # Clean and validate data
         df = self._clean_data(df)
@@ -90,8 +93,8 @@ class DataLoader:
         
         df = df.rename(columns=column_map)
         
-        # Verify required columns exist
-        required_cols = ['item_code', 'item_name', 'customer_name', 'date', 'total']
+        # Verify required columns exist (customer_name is now optional)
+        required_cols = ['item_code', 'item_name', 'date', 'total']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
@@ -149,24 +152,100 @@ class DataLoader:
         return df
     
     def _process_quantities(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process units and pieces columns."""
-        # Ensure numeric types
+        """
+        Process units, pieces, and quantity columns.
+        
+        Column Types:
+        - Units: Integer - number of full units sold
+        - Pieces: Always INTEGER - number of pieces
+        - Quantity: Can be FRACTIONAL (0.50, 0.80, etc.) - actual quantity sold
+        
+        Logic:
+        - If 'quantity' column exists in the data, use it as the actual quantity sold (can be fractional)
+        - Otherwise, calculate quantity from units and pieces:
+          * If pieces > 0, use pieces as quantity
+          * Otherwise, use units as quantity
+        
+        Examples with Quantity column:
+        - Units=0, Pieces=0, Quantity=0.50 → Use Quantity=0.50 (half unit sold)
+        - Units=0, Pieces=0, Quantity=0.80 → Use Quantity=0.80 (0.8 units sold)
+        - Units=1, Pieces=10, Quantity=1 → Use Quantity=1
+        
+        Examples without Quantity column (legacy/calculated):
+        - Units=1, Pieces=0 → quantity = 1
+        - Units=0, Pieces=4 → quantity = 4
+        """
+        # Ensure numeric types for units (always integer)
         if 'units' in df.columns:
-            df['units'] = pd.to_numeric(df['units'], errors='coerce').fillna(0)
+            df['units'] = pd.to_numeric(df['units'], errors='coerce').fillna(0).astype(int)
         else:
             df['units'] = 1
         
+        # Ensure numeric types for pieces (always integer)
         if 'pieces' in df.columns:
-            df['pieces'] = pd.to_numeric(df['pieces'], errors='coerce').fillna(0)
+            df['pieces'] = pd.to_numeric(df['pieces'], errors='coerce').fillna(0).astype(int)
         else:
             df['pieces'] = 0
         
-        # Calculate total quantity
-        # If pieces > 0, use pieces, otherwise use units
-        df['quantity'] = df.apply(
-            lambda row: row['pieces'] if row['pieces'] > 0 else row['units'],
-            axis=1
-        )
+        # Handle quantity column (can be fractional)
+        if 'quantity' in df.columns:
+            # Quantity column exists in the raw data - use it directly
+            # Keep as float to preserve fractional values (0.50, 0.80, etc.)
+            df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0)
+            print("Using 'Quantity' column from data (supports fractional values)")
+        else:
+            # Calculate quantity from units and pieces
+            # If pieces > 0, use pieces, otherwise use units
+            df['quantity'] = df.apply(
+                lambda row: row['pieces'] if row['pieces'] > 0 else row['units'],
+                axis=1
+            )
+            print("Calculated 'quantity' from 'units' and 'pieces' columns")
+        
+        return df
+    
+    def _process_customer_names(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Process customer names, handling empty/null values.
+        
+        Empty customer names will be replaced with 'Unknown Customer'.
+        """
+        # Ensure customer_name column exists
+        if 'customer_name' not in df.columns:
+            df['customer_name'] = 'Unknown Customer'
+        else:
+            # Replace empty, null, or whitespace-only values with 'Unknown Customer'
+            df['customer_name'] = df['customer_name'].fillna('Unknown Customer')
+            df['customer_name'] = df['customer_name'].astype(str).str.strip()
+            df.loc[df['customer_name'] == '', 'customer_name'] = 'Unknown Customer'
+            df.loc[df['customer_name'].str.lower() == 'nan', 'customer_name'] = 'Unknown Customer'
+        
+        return df
+    
+    def _process_order_ids(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Process order IDs from receipt column or compute if not present.
+        
+        If 'receipt' column exists, use it as order_id.
+        Otherwise, compute order IDs based on customer and datetime.
+        """
+        # Check if receipt column exists and has valid data
+        if 'receipt' in df.columns and df['receipt'].notna().any():
+            # Use receipt as order_id
+            df['order_id'] = df['receipt'].fillna(-1)  # Fill missing receipts with -1
+            
+            # Convert to appropriate type (try int, fallback to string)
+            try:
+                df['order_id'] = df['order_id'].astype(int)
+            except (ValueError, TypeError):
+                # If conversion fails, keep as string
+                df['order_id'] = df['order_id'].astype(str)
+            
+            print(f"Using receipt column as order_id: {df['order_id'].nunique()} unique orders")
+        else:
+            # Compute order IDs using the old logic
+            df = self._compute_order_ids(df)
+            print(f"Computed order_id from datetime: {df['order_id'].nunique()} unique orders")
         
         return df
     
@@ -208,8 +287,8 @@ class DataLoader:
     
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and validate data."""
-        # Remove rows with missing critical data
-        df = df.dropna(subset=['customer_name', 'date', 'total'])
+        # Remove rows with missing critical data (customer_name is now optional)
+        df = df.dropna(subset=['date', 'total'])
         
         # Ensure numeric columns
         numeric_cols = ['selling_price', 'total', 'quantity', 'units', 'pieces']
@@ -233,6 +312,20 @@ class DataLoader:
         df['day_of_week'] = df['date'].dt.dayofweek
         df['day_name'] = df['date'].dt.day_name()
         
+        # REFUND HANDLING: Identify refund transactions
+        # A refund is indicated by a negative total value
+        df['is_refund'] = df['total'] < 0
+        
+        # Count refunds for reporting
+        num_refunds = df['is_refund'].sum()
+        if num_refunds > 0:
+            refund_value = df[df['is_refund']]['total'].sum()
+            print(f"⚠ Identified {num_refunds} refund transactions (total: ${refund_value:,.2f})")
+        
+        # For refunds, quantities should also be negative to maintain consistency
+        # Ensure quantity matches the sign of total for refunds
+        df.loc[df['is_refund'], 'quantity'] = -abs(df.loc[df['is_refund'], 'quantity'])
+        
         return df
     
     def get_data_summary(self) -> dict:
@@ -242,20 +335,36 @@ class DataLoader:
         
         df = self.processed_data
         
+        # Separate refunds from regular sales
+        sales_df = df[~df['is_refund']]
+        refunds_df = df[df['is_refund']]
+        
+        # Calculate net revenue (sales - refunds)
+        gross_revenue = sales_df['total'].sum()
+        refund_amount = abs(refunds_df['total'].sum())
+        net_revenue = df['total'].sum()  # This already includes negative refunds
+        
         return {
             'total_records': len(df),
             'date_range': (df['date'].min(), df['date'].max()),
-            'total_revenue': df['total'].sum(),
+            'gross_revenue': gross_revenue,
+            'refund_amount': refund_amount,
+            'net_revenue': net_revenue,
+            'total_revenue': net_revenue,  # Alias for backward compatibility
+            'refund_rate_pct': (refund_amount / gross_revenue * 100) if gross_revenue > 0 else 0,
+            'num_refunds': len(refunds_df),
+            'num_sales': len(sales_df),
             'unique_customers': df['customer_name'].nunique(),
             'unique_products': df['item_name'].nunique(),
             'unique_orders': df['order_id'].nunique(),
             'avg_order_value': df.groupby('order_id')['total'].sum().mean(),
-            'total_quantity_sold': df['quantity'].sum()
+            'total_quantity_sold': sales_df['quantity'].sum(),  # Only count positive sales
+            'total_quantity_refunded': abs(refunds_df['quantity'].sum())
         }
 
 
 def load_sample_data() -> pd.DataFrame:
-    """Generate sample data for testing purposes."""
+    """Generate sample data for testing purposes with receipt column and unknown customers."""
     np.random.seed(42)
     
     # Sample data generation
@@ -263,6 +372,9 @@ def load_sample_data() -> pd.DataFrame:
     start_date = datetime(2024, 1, 1)
     
     customers = [f"Customer_{i}" for i in range(1, 51)]
+    # Add some None/empty customers for testing
+    customers.extend([None, '', '  '])  # These will become "Unknown Customer"
+    
     items = [
         ('ITEM001', 'Paracetamol 500mg', 'Pain Relief'),
         ('ITEM002', 'Amoxicillin 250mg', 'Antibiotics'),
@@ -279,24 +391,52 @@ def load_sample_data() -> pd.DataFrame:
     sale_types = ['Cash', 'Insurance', 'Credit']
     
     records = []
+    receipt_counter = 1
+    
     for _ in range(n_records):
         item_code, item_name, category = items[np.random.choice(len(items))]
         date = start_date + timedelta(days=np.random.randint(0, 300))
         time = f"{np.random.randint(8, 20):02d}:{np.random.randint(0, 60):02d}:{np.random.randint(0, 60):02d}"
-        units = np.random.randint(1, 5)
-        pieces = units * np.random.choice([1, 10, 20, 30])
         selling_price = np.random.uniform(5, 200)
-        total = selling_price * units
+        
+        # Generate realistic quantity data:
+        # - Units: always integer (full units)
+        # - Pieces: always integer (number of pieces)
+        # - Quantity: can be fractional (actual quantity sold)
+        
+        if np.random.random() > 0.85:  # 15% chance of fractional sale
+            # Fractional sale: quantity is fractional (0.25, 0.33, 0.5, 0.75, 0.80)
+            units = 0
+            pieces = 0
+            quantity = np.random.choice([0.25, 0.33, 0.5, 0.75, 0.80])
+        elif np.random.random() > 0.5:  # 50% of remaining: piece-based sale
+            # Selling by pieces (units=0, but pieces>0)
+            units = 0
+            pieces = np.random.randint(1, 10)  # Integer pieces
+            quantity = pieces  # Quantity equals pieces
+        else:  # Remaining: normal unit-based sale
+            # Normal sale by units
+            units = np.random.randint(1, 5)
+            pieces = units * np.random.choice([10, 20, 30])  # Integer pieces
+            quantity = units  # Quantity equals units
+        
+        total = selling_price * quantity
+        
+        # Generate receipt ID (some items may share same receipt for multi-item orders)
+        if np.random.random() > 0.3:  # 70% chance of new receipt
+            receipt_counter += 1
         
         records.append({
+            'Receipt': receipt_counter,
             'Item Code': item_code,
             'Item Name': item_name,
             'Units': units,
             'Pieces': pieces,
+            'Quantity': quantity,
             'Selling Price': selling_price,
             'Total': total,
             'Sale Type': np.random.choice(sale_types),
-            'Customer Name': np.random.choice(customers),
+            'Customer Name': np.random.choice(customers),  # May include None or empty
             'Date': date.strftime('%Y-%m-%d'),
             'Time': time,
             'Category': category

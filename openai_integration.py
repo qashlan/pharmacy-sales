@@ -4,6 +4,7 @@ import os
 import json
 import re
 import pandas as pd
+import numpy as np
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import config
@@ -491,6 +492,125 @@ Keep it concise (2-3 sentences)."""
     def clear_history(self):
         """Clear conversation history."""
         self.conversation_history = []
+    
+    def execute_data_query(self, user_query: str) -> Dict[str, Any]:
+        """
+        Execute a dynamic data query using GPT to generate and run pandas code.
+        
+        This allows for arbitrary queries without predefined handlers.
+        
+        Args:
+            user_query: Natural language query
+            
+        Returns:
+            Dictionary with query results
+        """
+        if not self.is_available:
+            return {
+                'success': False,
+                'error': 'OpenAI not available'
+            }
+        
+        system_prompt = f"""You are a data analyst assistant with access to pharmacy sales data.
+
+{self.get_data_context()}
+
+Your task is to write Python pandas code to answer the user's query.
+
+IMPORTANT RULES:
+1. The DataFrame is available as 'df'
+2. Always filter out refunds: df = df[~df['is_refund']] unless specifically asked about refunds
+3. Write clean, efficient pandas code
+4. Return a JSON object with:
+   - "code": The pandas code to execute (as a string)
+   - "explanation": Brief explanation of what the code does
+5. Only use pandas operations - no external libraries
+6. Code should assign the final result to a variable called 'result'
+7. Keep results limited (use .head(20) for large results)
+8. For aggregations, provide meaningful column names
+
+Example response format:
+{{
+    "code": "result = df.groupby('item_name')['total'].sum().sort_values(ascending=False).head(10)",
+    "explanation": "Groups by product name, sums revenue, sorts descending, takes top 10"
+}}
+
+Respond ONLY with valid JSON."""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_query}
+                ],
+                temperature=0.3,
+                max_tokens=800,
+                response_format={"type": "json_object"}
+            )
+            
+            query_plan = json.loads(response.choices[0].message.content)
+            code = query_plan.get('code', '')
+            explanation = query_plan.get('explanation', '')
+            
+            if not code:
+                return {
+                    'success': False,
+                    'error': 'No code generated'
+                }
+            
+            # Execute the code safely
+            try:
+                # Create a safe execution environment
+                local_vars = {'df': self.data.copy(), 'pd': pd, 'np': np}
+                
+                # Execute the code
+                exec(code, {"__builtins__": {}}, local_vars)
+                
+                result = local_vars.get('result')
+                
+                if result is None:
+                    return {
+                        'success': False,
+                        'error': 'Code did not produce a result variable'
+                    }
+                
+                # Convert result to appropriate format
+                if isinstance(result, pd.DataFrame):
+                    result_data = result.to_dict('records')
+                    result_summary = f"Found {len(result)} records"
+                elif isinstance(result, pd.Series):
+                    result_data = result.to_dict()
+                    result_summary = f"Found {len(result)} items"
+                elif isinstance(result, (int, float, str)):
+                    result_data = {'value': result}
+                    result_summary = f"Result: {result}"
+                else:
+                    result_data = str(result)
+                    result_summary = f"Result: {result}"
+                
+                return {
+                    'success': True,
+                    'data': result_data,
+                    'summary': result_summary,
+                    'explanation': explanation,
+                    'code': code,
+                    'query': user_query
+                }
+                
+            except Exception as e:
+                return {
+                    'success': False,
+                    'error': f'Code execution error: {str(e)}',
+                    'code': code,
+                    'explanation': explanation
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'GPT query planning failed: {str(e)}'
+            }
 
 
 def check_openai_status() -> Tuple[bool, str]:

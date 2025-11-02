@@ -213,9 +213,16 @@ def get_refill_predictor(data):
 
 
 @st.cache_resource
-def get_cross_sell_analyzer(data):
-    """Create and cache CrossSellAnalyzer instance."""
-    return CrossSellAnalyzer(data)
+def get_cross_sell_analyzer(data, _enable_sampling=True, _max_records=100000):
+    """
+    Create and cache CrossSellAnalyzer instance.
+    
+    Args:
+        data: Sales data
+        _enable_sampling: Enable sampling for large datasets (for performance)
+        _max_records: Maximum records to analyze
+    """
+    return CrossSellAnalyzer(data, enable_sampling=_enable_sampling, max_records=_max_records)
 
 
 @st.cache_resource
@@ -269,8 +276,8 @@ def sales_analysis_page(data):
     display_metrics(metrics)
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs([
-        f"📈 {t('trends')}", f"🏆 {t('top_products')}", f"⏰ {t('time_patterns')}", f"🚨 {t('anomalies')}"
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        f"📈 {t('trends')}", f"🏆 {t('top_products')}", f"⏰ {t('time_patterns')}", f"🚨 {t('anomalies')}", f"↩️ {t('refunds')}"
     ])
     
     with tab1:
@@ -291,11 +298,10 @@ def sales_analysis_page(data):
         
         # Revenue trend chart
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
+        fig.add_trace(go.Bar(
             x=trends[x_col], y=trends['revenue'],
-            mode='lines+markers',
             name='Revenue',
-            line=dict(color='#1f77b4', width=2)
+            marker=dict(color='#1f77b4')
         ))
         
         if 'revenue_ma7' in trends.columns:
@@ -303,7 +309,7 @@ def sales_analysis_page(data):
                 x=trends[x_col], y=trends['revenue_ma7'],
                 mode='lines',
                 name='7-Day MA',
-                line=dict(color='#ff7f0e', dash='dash')
+                line=dict(color='#ff7f0e', width=3, dash='dash')
             ))
         
         period_key = 'daily' if period == t('daily') else ('weekly' if period == t('weekly') else 'monthly')
@@ -319,18 +325,20 @@ def sales_analysis_page(data):
         col1, col2 = st.columns(2)
         
         with col1:
-            fig_orders = px.line(
+            fig_orders = px.bar(
                 trends, x=x_col, y='orders',
                 title=f"{period} Orders",
-                markers=True
+                color='orders',
+                color_continuous_scale='Blues'
             )
             st.plotly_chart(fig_orders, use_container_width=True)
         
         with col2:
-            fig_customers = px.line(
+            fig_customers = px.bar(
                 trends, x=x_col, y='customers',
                 title=f"{period} Unique Customers",
-                markers=True
+                color='customers',
+                color_continuous_scale='Greens'
             )
             st.plotly_chart(fig_customers, use_container_width=True)
     
@@ -343,7 +351,7 @@ def sales_analysis_page(data):
             horizontal=True
         )
         
-        n_products = st.slider(t('number_of_products'), 5, 20, 10)
+        n_products = st.slider(t('number_of_products'), 5, 100, 10)
         
         if metric_choice == t('revenue'):
             top_products = analyzer.get_top_products(n_products, 'revenue')
@@ -463,10 +471,259 @@ def sales_analysis_page(data):
         if len(anomaly_days) > 0:
             st.subheader("Detected Anomalies")
             st.dataframe(
-                format_datetime_columns(anomaly_days[['date', 'total', 'order_id', 'revenue_zscore']].sort_values('date', ascending=False)),
+                format_datetime_columns(anomaly_days[['date', 'total', 'num_orders', 'revenue_zscore']].sort_values('date', ascending=False)),
                 use_container_width=True,
                 hide_index=True
             )
+    
+    with tab5:
+        st.subheader(t('refund_analysis'))
+        
+        # Get refund analysis
+        refund_analysis = analyzer.get_refund_analysis()
+        
+        if not refund_analysis.get('has_refunds', False):
+            st.info(t('no_refunds_found'))
+        else:
+            # Overview metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric(
+                    t('total_refunds'),
+                    f"${refund_analysis['total_refund_amount']:,.2f}",
+                    delta=f"-{refund_analysis['refund_rate_pct']:.1f}%",
+                    delta_color="inverse"
+                )
+            with col2:
+                st.metric(
+                    t('refund_transactions'),
+                    f"{refund_analysis['total_refund_transactions']:,}"
+                )
+            with col3:
+                st.metric(
+                    t('refund_rate'),
+                    f"{refund_analysis['refund_rate_pct']:.2f}%"
+                )
+            with col4:
+                st.metric(
+                    t('avg_refund_value'),
+                    f"${refund_analysis['avg_refund_value']:,.2f}"
+                )
+            
+            # Controls for refunded products and customers (outside tabs to prevent reset)
+            st.markdown("### 🎛️ Display Controls")
+            col_ctrl1, col_ctrl2 = st.columns(2)
+            with col_ctrl1:
+                n_refunded = st.slider(
+                    "📦 Number of Refunded Products",
+                    min_value=5,
+                    max_value=100,
+                    value=10,
+                    step=5,
+                    help="Adjust how many refunded products to display",
+                    key="refund_products_slider"
+                )
+            with col_ctrl2:
+                n_refund_customers = st.slider(
+                    "👤 Number of Refund Customers",
+                    min_value=5,
+                    max_value=100,
+                    value=10,
+                    step=5,
+                    help="Adjust how many refund customers to display",
+                    key="refund_customers_slider_new"
+                )
+            
+            st.markdown("---")
+            
+            # Tabs within refunds
+            refund_tab1, refund_tab2, refund_tab3, refund_tab4 = st.tabs([
+                f"📦 {t('refunded_products')}", 
+                f"👤 {t('refund_customers')}", 
+                f"📅 {t('refund_trends')}",
+                f"📋 {t('refund_details')}"
+            ])
+            
+            with refund_tab1:
+                st.subheader(t('top_refunded_products'))
+                
+                top_refunded = refund_analysis['top_refunded_products']
+                
+                if len(top_refunded) > 0:
+                    # Bar chart
+                    fig = px.bar(
+                        top_refunded.head(n_refunded),
+                        x='item_name',
+                        y='refund_amount',
+                        title=f"{t('products_by_refund_amount')} - Top {n_refunded}",
+                        color='refund_amount',
+                        color_continuous_scale='Reds',
+                        labels={'refund_amount': t('refund_amount'), 'item_name': t('product')}
+                    )
+                    fig.update_xaxes(tickangle=-45)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Detailed table - shows same number as slider
+                    st.dataframe(
+                        top_refunded.head(n_refunded).rename(columns={
+                            'item_name': t('product'),
+                            'refund_amount': t('refund_amount'),
+                            'refund_quantity': t('quantity'),
+                            'refund_orders': t('orders')
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info(t('no_data_available'))
+            
+            with refund_tab2:
+                st.subheader(t('customers_with_most_refunds'))
+                
+                top_refund_customers = refund_analysis['top_refund_customers']
+                
+                if len(top_refund_customers) > 0:
+                    # Bar chart
+                    fig = px.bar(
+                        top_refund_customers.head(n_refund_customers),
+                        x='customer_name',
+                        y='refund_amount',
+                        title=f"{t('customers_by_refund_amount')} - Top {n_refund_customers}",
+                        color='refund_amount',
+                        color_continuous_scale='Oranges',
+                        labels={'refund_amount': t('refund_amount'), 'customer_name': t('customer')}
+                    )
+                    fig.update_xaxes(tickangle=-45)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Detailed table - shows same number as slider
+                    st.dataframe(
+                        top_refund_customers.head(n_refund_customers).rename(columns={
+                            'customer_name': t('customer'),
+                            'refund_amount': t('refund_amount'),
+                            'refund_orders': t('orders')
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info(t('no_data_available'))
+            
+            with refund_tab3:
+                st.subheader(t('refund_trends_over_time'))
+                
+                # Monthly refunds
+                refunds_by_month = refund_analysis['refunds_by_month']
+                
+                if len(refunds_by_month) > 0:
+                    # Convert period to string for plotting
+                    refunds_by_month['month_str'] = refunds_by_month['month'].astype(str)
+                    
+                    # Bar chart
+                    fig = px.bar(
+                        refunds_by_month,
+                        x='month_str',
+                        y='refund_amount',
+                        title=t('monthly_refund_trend'),
+                        labels={'refund_amount': t('refund_amount'), 'month_str': t('month')},
+                        color='refund_amount',
+                        color_continuous_scale='Reds'
+                    )
+                    fig.update_layout(
+                        xaxis_title=t('month'),
+                        yaxis_title=t('refund_amount') + ' ($)',
+                        hovermode='x unified'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Orders trend
+                    fig2 = px.bar(
+                        refunds_by_month,
+                        x='month_str',
+                        y='refund_orders',
+                        title=t('monthly_refund_orders'),
+                        labels={'refund_orders': t('refund_orders'), 'month_str': t('month')},
+                        color='refund_orders',
+                        color_continuous_scale='Reds'
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.info(t('no_data_available'))
+            
+            with refund_tab4:
+                st.subheader(t('refund_transaction_details'))
+                
+                # Get actual refund transactions from data
+                refund_data = data[data['is_refund']]
+                
+                if len(refund_data) > 0:
+                    # Add filter options
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Date filter
+                        date_range = st.date_input(
+                            t('date_range'),
+                            value=(refund_data['date'].min().date(), refund_data['date'].max().date()),
+                            key='refund_date_range'
+                        )
+                    
+                    with col2:
+                        # Product filter
+                        all_products = [t('all_products')] + sorted(refund_data['item_name'].unique().tolist())
+                        selected_product = st.selectbox(
+                            t('filter_by_product'),
+                            all_products
+                        )
+                    
+                    # Apply filters
+                    filtered_refunds = refund_data.copy()
+                    
+                    if len(date_range) == 2:
+                        filtered_refunds = filtered_refunds[
+                            (filtered_refunds['date'].dt.date >= date_range[0]) &
+                            (filtered_refunds['date'].dt.date <= date_range[1])
+                        ]
+                    
+                    if selected_product != t('all_products'):
+                        filtered_refunds = filtered_refunds[filtered_refunds['item_name'] == selected_product]
+                    
+                    # Display summary
+                    st.metric(
+                        t('filtered_refunds'),
+                        f"{len(filtered_refunds):,}",
+                        f"${abs(filtered_refunds['total'].sum()):,.2f}"
+                    )
+                    
+                    # Display refund transactions
+                    display_columns = ['date', 'order_id', 'customer_name', 'item_name', 'quantity', 'total']
+                    refund_display = filtered_refunds[display_columns].copy()
+                    refund_display['total'] = refund_display['total'].abs()  # Show as positive for readability
+                    refund_display = refund_display.sort_values('date', ascending=False)
+                    
+                    st.dataframe(
+                        format_datetime_columns(refund_display.rename(columns={
+                            'date': t('date'),
+                            'order_id': t('order_id'),
+                            'customer_name': t('customer'),
+                            'item_name': t('product'),
+                            'quantity': t('quantity'),
+                            'total': t('refund_amount')
+                        })),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    # Download button
+                    csv = refund_display.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label=t('download_refund_data'),
+                        data=csv,
+                        file_name=f"refunds_{date_range[0]}_{date_range[1]}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info(t('no_refund_transactions'))
 
 
 def customer_analysis_page(data):
@@ -766,6 +1023,28 @@ def product_analysis_page(data):
     
     analyzer = get_product_analyzer(data)
     
+    # Display overall product metrics including refunds
+    st.subheader("📊 Product Overview")
+    product_summary = analyzer.get_product_summary()
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("Total Products", f"{len(product_summary):,}")
+    with col2:
+        total_sold = product_summary['quantity_sold'].sum()
+        st.metric("Total Quantity Sold", f"{total_sold:,.0f}")
+    with col3:
+        total_refunded = product_summary['refund_quantity'].sum()
+        st.metric("Total Refunded", f"{total_refunded:,.0f}", delta=f"-{total_refunded:,.0f}", delta_color="inverse")
+    with col4:
+        net_quantity = product_summary['net_quantity'].sum()
+        st.metric("Net Quantity", f"{net_quantity:,.0f}")
+    with col5:
+        refund_rate = (total_refunded / total_sold * 100) if total_sold > 0 else 0
+        st.metric("Refund Rate", f"{refund_rate:.2f}%")
+    
+    st.markdown("---")
+    
     tab1, tab2, tab3, tab4 = st.tabs([
         f"🏃 {t('fast_slow_movers')}", f"📊 {t('abc_analysis')}", f"🔄 {t('lifecycle')}", f"📈 {t('inventory_signals')}"
     ])
@@ -804,12 +1083,25 @@ def product_analysis_page(data):
             fast_movers = analyzer.get_fast_moving_products(n_fast)
             
             if len(fast_movers) > 0:
-                st.dataframe(format_datetime_columns(fast_movers), use_container_width=True, hide_index=True)
+                # Format the dataframe for better display
+                fast_movers_display = fast_movers.copy()
+                st.dataframe(format_datetime_columns(fast_movers_display), use_container_width=True, hide_index=True)
                 
-                # Quick stats
+                # Quick stats with refund info
                 total_fast_revenue = fast_movers['revenue'].sum()
                 total_fast_quantity = fast_movers['quantity_sold'].sum()
-                st.info(f"💰 Combined Revenue: ${total_fast_revenue:,.2f} | 📦 Total Quantity: {total_fast_quantity:,.0f}")
+                total_fast_refunded = fast_movers['refund_quantity'].sum()
+                total_fast_net = fast_movers['net_quantity'].sum()
+                
+                col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+                with col_s1:
+                    st.metric("Combined Revenue", f"${total_fast_revenue:,.2f}")
+                with col_s2:
+                    st.metric("Total Sold", f"{total_fast_quantity:,.0f}")
+                with col_s3:
+                    st.metric("Total Refunded", f"{total_fast_refunded:,.0f}", delta_color="inverse")
+                with col_s4:
+                    st.metric("Net Quantity", f"{total_fast_net:,.0f}")
             else:
                 st.warning("No fast-moving products found")
         
@@ -818,12 +1110,28 @@ def product_analysis_page(data):
             slow_movers = analyzer.get_slow_moving_products(n_slow)
             
             if len(slow_movers) > 0:
-                st.dataframe(format_datetime_columns(slow_movers), use_container_width=True, hide_index=True)
+                # Format the dataframe for better display
+                slow_movers_display = slow_movers.copy()
+                st.dataframe(format_datetime_columns(slow_movers_display), use_container_width=True, hide_index=True)
                 
-                # Quick stats
+                # Quick stats with refund info
                 total_slow_revenue = slow_movers['revenue'].sum()
                 avg_days_since_sale = slow_movers['days_since_last_sale'].mean()
-                st.warning(f"💰 Combined Revenue: ${total_slow_revenue:,.2f} | ⏰ Avg Days Since Sale: {avg_days_since_sale:.0f}")
+                total_slow_quantity = slow_movers['quantity_sold'].sum()
+                total_slow_refunded = slow_movers['refund_quantity'].sum()
+                total_slow_net = slow_movers['net_quantity'].sum()
+                
+                col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
+                with col_s1:
+                    st.metric("Combined Revenue", f"${total_slow_revenue:,.2f}")
+                with col_s2:
+                    st.metric("Total Sold", f"{total_slow_quantity:,.0f}")
+                with col_s3:
+                    st.metric("Total Refunded", f"{total_slow_refunded:,.0f}", delta_color="inverse")
+                with col_s4:
+                    st.metric("Net Quantity", f"{total_slow_net:,.0f}")
+                with col_s5:
+                    st.metric("Avg Days Since Sale", f"{avg_days_since_sale:.0f}")
             else:
                 st.info("No slow-moving products found")
         
@@ -865,9 +1173,11 @@ def product_analysis_page(data):
         abc_summary = abc_data.groupby('abc_class').agg({
             'item_name': 'count',
             'revenue': 'sum',
-            'quantity_sold': 'sum'
+            'quantity_sold': 'sum',
+            'refund_quantity': 'sum',
+            'net_quantity': 'sum'
         }).reset_index()
-        abc_summary.columns = ['Class', 'Products', 'Revenue', 'Quantity']
+        abc_summary.columns = ['Class', 'Products', 'Revenue', 'Quantity Sold', 'Refund Quantity', 'Net Quantity']
         
         col1, col2 = st.columns(2)
         
@@ -1427,7 +1737,21 @@ def cross_sell_page(data):
 {t('market_basket_helps')}
     """)
     
-    analyzer = get_cross_sell_analyzer(data)
+    # Performance optimization option
+    enable_sampling = True
+    max_records = 100000
+    
+    # Show performance info for large datasets
+    if len(data) > 50000:
+        with st.expander("⚡ Performance Settings", expanded=False):
+            st.info(f"📊 Dataset has {len(data):,} records. For optimal performance, sampling is recommended.")
+            enable_sampling = st.checkbox("Enable sampling for faster analysis", value=True, 
+                                         help="Sample most recent records for better performance")
+            if enable_sampling:
+                max_records = st.slider("Max records to analyze", 10000, 200000, 100000, 10000,
+                                       help="More records = more accurate but slower")
+    
+    analyzer = get_cross_sell_analyzer(data, _enable_sampling=enable_sampling, _max_records=max_records)
     
     # Show diagnostics in expander
     with st.expander("📊 Analysis Diagnostics & Data Quality", expanded=False):
@@ -1798,6 +2122,16 @@ def ai_query_page(data):
                         st.success("✓ Analysis Complete")
                     
                     st.markdown(f"**Answer:**\n\n{result['answer']}")
+                    
+                    # Show executed code for dynamic queries
+                    if result.get('dynamic_query') and result.get('code_executed'):
+                        with st.expander("🔍 View Executed Code", expanded=False):
+                            st.code(result['code_executed'], language='python')
+                            st.caption("This pandas code was dynamically generated by GPT to answer your query")
+                    
+                    # Show note for dynamic queries
+                    if result.get('note'):
+                        st.info(f"ℹ️ {result['note']}")
                     
                     # Show GPT-generated insights if available
                     if 'gpt_insights' in result and result['gpt_insights']:

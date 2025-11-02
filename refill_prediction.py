@@ -30,7 +30,7 @@ class RefillPredictor:
         
     def calculate_purchase_intervals(self, include_price_prediction: bool = True) -> pd.DataFrame:
         """
-        Calculate purchase intervals for each customer-product pair. (CACHED)
+        Calculate purchase intervals for each customer-product pair with refund handling. (CACHED)
         
         Returns:
             DataFrame with average purchase intervals and statistics
@@ -39,8 +39,20 @@ class RefillPredictor:
         if self.customer_product_intervals is not None:
             return self.customer_product_intervals
         
+        # Exclude "Unknown Customer" and refunds from refill predictions
+        # Unknown customers are walk-ins without identifiable info, so tracking refill patterns is not meaningful
+        # Refunds don't represent actual consumption/usage patterns
+        data_for_refills = self.data[
+            (self.data['customer_name'] != 'Unknown Customer') &
+            (~self.data['is_refund'])
+        ].copy()
+        
+        num_refunds_excluded = len(self.data[self.data['is_refund']])
+        if num_refunds_excluded > 0:
+            print(f"ℹ Refill prediction: Excluded {num_refunds_excluded} refund transactions from analysis")
+        
         # Group by customer and product
-        customer_product_purchases = self.data.groupby(
+        customer_product_purchases = data_for_refills.groupby(
             ['customer_name', 'item_code', 'item_name']
         )['date'].apply(list).reset_index()
         
@@ -60,9 +72,9 @@ class RefillPredictor:
             first_order_date = min(purchase_dates)
             
             # Get purchase details for this customer-product pair
-            purchase_data = self.data[
-                (self.data['customer_name'] == customer) &
-                (self.data['item_name'] == item_name)
+            purchase_data = data_for_refills[
+                (data_for_refills['customer_name'] == customer) &
+                (data_for_refills['item_name'] == item_name)
             ].sort_values('date')
             
             # Calculate intervals between consecutive purchases
@@ -614,8 +626,14 @@ class RefillPredictor:
     
     def get_seasonal_refill_patterns(self) -> pd.DataFrame:
         """Analyze if refill patterns vary by season or month."""
+        # Exclude "Unknown Customer" and refunds from seasonal refill analysis
+        data_for_analysis = self.data[
+            (self.data['customer_name'] != 'Unknown Customer') &
+            (~self.data['is_refund'])
+        ].copy()
+        
         # Group purchases by month
-        monthly_refills = self.data.groupby(['month', 'item_name']).agg({
+        monthly_refills = data_for_analysis.groupby(['month', 'item_name']).agg({
             'customer_name': 'nunique',
             'quantity': 'sum',
             'total': 'sum'

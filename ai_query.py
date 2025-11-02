@@ -320,6 +320,7 @@ class AIQueryEngine:
         intent = interpretation.get('intent', '')
         action = interpretation.get('action', '')
         params = interpretation.get('parameters', {})
+        raw_query = interpretation.get('raw_query', '')
         
         # Map OpenAI intents to handler methods (comprehensive mapping)
         handler_map = {
@@ -345,14 +346,18 @@ class AIQueryEngine:
             'frequent_buyers': self._handle_top_customers,  # Similar to top customers
             'search_customer': self._handle_customer_search,  # New handler
             'customer_details': self._handle_customer_search,
+            'new_customers': self._handle_new_customers,
+            'customer_acquisition': self._handle_new_customers,
             
             # Product analysis
-            'fast_moving_products': lambda q: self._handle_fast_moving_products(q),
-            'fast_moving': lambda q: self._handle_fast_moving_products(q),
-            'slow_moving_products': lambda q: self._handle_slow_moving_products(q),
-            'slow_moving': lambda q: self._handle_slow_moving_products(q),
+            'fast_moving_products': self._handle_fast_movers,
+            'fast_moving': self._handle_fast_movers,
+            'slow_moving_products': self._handle_slow_movers,
+            'slow_moving': self._handle_slow_movers,
             'product_performance': self._handle_top_products,
             'best_selling': self._handle_top_products,
+            'inventory_signals': self._handle_inventory_signals,
+            'stock_planning': self._handle_inventory_signals,
             
             # RFM analysis
             'rfm_segments': self._handle_rfm_segments,
@@ -378,7 +383,7 @@ class AIQueryEngine:
         handler = handler_map.get(action)
         if handler:
             try:
-                return handler("")  # Handlers don't actually use the question string
+                return handler(raw_query.lower())  # Pass the original query for parameter extraction
             except Exception as e:
                 return {
                     'success': False,
@@ -392,7 +397,7 @@ class AIQueryEngine:
             handler = handler_map.get(intent)
             if handler:
                 try:
-                    return handler("")
+                    return handler(raw_query.lower())  # Pass the original query for parameter extraction
                 except Exception as e:
                     return {
                         'success': False,
@@ -400,36 +405,58 @@ class AIQueryEngine:
                         'error': str(e)
                     }
         
-        # No handler found - use GPT to generate a general response
+        # No handler found - use GPT to dynamically query the data
         if self.openai_enabled and self.openai_assistant:
             try:
-                # Generate a response using the interpretation
-                response_text = f"Based on your question about {intent} - {action}:\n\n"
+                # Use dynamic data querying for queries without specific handlers
+                dynamic_result = self.openai_assistant.execute_data_query(raw_query)
                 
-                # Try to provide some relevant general information
-                if 'sales' in intent or 'revenue' in intent:
-                    metrics = self.sales_analyzer.get_overall_metrics()
-                    response_text += f"Total revenue: ${metrics['total_revenue']:,.2f}\n"
-                    response_text += f"Average daily revenue: ${metrics['daily_avg_revenue']:,.2f}\n"
-                elif 'customer' in intent:
-                    top_customers = self.customer_analyzer.get_high_value_customers(10)
-                    response_text += f"We have {len(self.data['customer_name'].unique())} unique customers.\n"
-                    response_text += f"Top customers by spend:\n"
-                    for _, row in top_customers.head(5).iterrows():
-                        response_text += f"- {row['customer_name']}: ${row['total_spent']:,.2f}\n"
-                elif 'product' in intent:
-                    top_products = self.sales_analyzer.get_top_products(10, 'revenue')
-                    response_text += f"Top selling products:\n"
-                    for _, row in top_products.head(5).iterrows():
-                        response_text += f"- {row['item_name']}: ${row['revenue']:,.2f}\n"
-                
-                return {
-                    'success': True,
-                    'answer': response_text,
-                    'interpretation': interpretation,
-                    'note': 'Generated general response based on query intent'
-                }
-            except:
+                if dynamic_result['success']:
+                    # Generate a natural language answer from the result
+                    answer_text = f"**{interpretation.get('intent', 'Analysis').replace('_', ' ').title()}**\n\n"
+                    answer_text += f"{dynamic_result.get('explanation', '')}\n\n"
+                    answer_text += f"**Result:** {dynamic_result.get('summary', '')}\n"
+                    
+                    return {
+                        'success': True,
+                        'answer': answer_text,
+                        'data': dynamic_result.get('data'),
+                        'viz_type': 'table',
+                        'interpretation': interpretation,
+                        'code_executed': dynamic_result.get('code'),
+                        'dynamic_query': True,
+                        'note': 'Results from dynamic data querying (no predefined handler)'
+                    }
+                else:
+                    # Fallback to basic general information
+                    response_text = f"I couldn't process your query dynamically: {dynamic_result.get('error')}\n\n"
+                    response_text += f"Based on your question about {intent} - {action}:\n\n"
+                    
+                    # Try to provide some relevant general information
+                    if 'sales' in intent or 'revenue' in intent:
+                        metrics = self.sales_analyzer.get_overall_metrics()
+                        response_text += f"Total revenue: ${metrics['total_revenue']:,.2f}\n"
+                        response_text += f"Average daily revenue: ${metrics['daily_avg_revenue']:,.2f}\n"
+                    elif 'customer' in intent:
+                        top_customers = self.customer_analyzer.get_high_value_customers(10)
+                        response_text += f"We have {len(self.data['customer_name'].unique())} unique customers.\n"
+                        response_text += f"Top customers by spend:\n"
+                        for _, row in top_customers.head(5).iterrows():
+                            response_text += f"- {row['customer_name']}: ${row['total_spent']:,.2f}\n"
+                    elif 'product' in intent:
+                        top_products = self.sales_analyzer.get_top_products(10, 'revenue')
+                        response_text += f"Top selling products:\n"
+                        for _, row in top_products.head(5).iterrows():
+                            response_text += f"- {row['item_name']}: ${row['revenue']:,.2f}\n"
+                    
+                    return {
+                        'success': True,
+                        'answer': response_text,
+                        'interpretation': interpretation,
+                        'note': 'Generated general response based on query intent'
+                    }
+            except Exception as e:
+                print(f"Dynamic query failed: {e}")
                 pass
         
         # Final fallback
@@ -775,31 +802,6 @@ class AIQueryEngine:
             'answer': answer_text,
             'data': customer_data.to_dict('records'),
             'viz_type': 'customer_profile'
-        }
-    
-    def _handle_upcoming_refills(self, question: str) -> Dict:
-        """Handle upcoming refills queries."""
-        self.refill_predictor.calculate_purchase_intervals()
-        upcoming = self.refill_predictor.get_upcoming_refills(30)
-        
-        if len(upcoming) == 0:
-            return {
-                'success': True,
-                'answer': "No refills expected in the next 30 days.",
-                'data': [],
-                'viz_type': 'metric'
-            }
-        
-        answer_text = f"📅 {len(upcoming)} upcoming refills in the next 30 days:\n"
-        for idx, row in upcoming.head(5).iterrows():
-            answer_text += (f"- {row['customer_name']} - {row['item_name']}: "
-                           f"expected in {row['days_until_predicted']} days\n")
-        
-        return {
-            'success': True,
-            'answer': answer_text,
-            'data': upcoming.to_dict('records'),
-            'viz_type': 'table'
         }
     
     def _handle_overdue_refills(self, question: str) -> Dict:

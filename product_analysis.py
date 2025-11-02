@@ -22,12 +22,17 @@ class ProductAnalyzer:
         self._product_summary_cache: Optional[pd.DataFrame] = None
         
     def get_product_summary(self) -> pd.DataFrame:
-        """Get comprehensive summary for each product. (CACHED)"""
+        """Get comprehensive summary for each product with refund handling. (CACHED)"""
         # Return cached result if available
         if self._product_summary_cache is not None:
             return self._product_summary_cache
         
-        product_stats = self.data.groupby(['item_code', 'item_name', 'category']).agg({
+        # Separate sales from refunds
+        sales_data = self.data[~self.data['is_refund']]
+        refunds_data = self.data[self.data['is_refund']]
+        
+        # Calculate sales metrics
+        product_stats = sales_data.groupby(['item_code', 'item_name', 'category']).agg({
             'order_id': 'nunique',
             'quantity': 'sum',
             'total': 'sum',
@@ -38,12 +43,39 @@ class ProductAnalyzer:
         # Flatten column names
         product_stats.columns = [
             'item_code', 'item_name', 'category', 'orders', 'quantity_sold',
-            'revenue', 'unique_customers', 'first_sale', 'last_sale'
+            'gross_revenue', 'unique_customers', 'first_sale', 'last_sale'
         ]
         
+        # Calculate refund metrics per product
+        product_refunds = refunds_data.groupby(['item_code', 'item_name', 'category']).agg({
+            'total': lambda x: abs(x.sum()),
+            'quantity': lambda x: abs(x.sum()),
+            'order_id': 'nunique'
+        }).reset_index()
+        product_refunds.columns = ['item_code', 'item_name', 'category', 'refund_amount', 'refund_quantity', 'refund_orders']
+        
+        # Merge refund data
+        product_stats = product_stats.merge(
+            product_refunds[['item_code', 'refund_amount', 'refund_quantity', 'refund_orders']], 
+            on='item_code', 
+            how='left'
+        )
+        product_stats['refund_amount'] = product_stats['refund_amount'].fillna(0)
+        product_stats['refund_quantity'] = product_stats['refund_quantity'].fillna(0)
+        product_stats['refund_orders'] = product_stats['refund_orders'].fillna(0).astype(int)
+        
+        # Calculate net metrics
+        product_stats['revenue'] = product_stats['gross_revenue'] - product_stats['refund_amount']
+        product_stats['net_quantity'] = product_stats['quantity_sold'] - product_stats['refund_quantity']
+        
+        # Calculate refund rate
+        product_stats['refund_rate_pct'] = (
+            product_stats['refund_amount'] / product_stats['gross_revenue'] * 100
+        ).fillna(0)
+        
         # Calculate metrics
-        product_stats['avg_price'] = product_stats['revenue'] / product_stats['quantity_sold']
-        product_stats['avg_quantity_per_order'] = product_stats['quantity_sold'] / product_stats['orders']
+        product_stats['avg_price'] = product_stats['revenue'] / product_stats['net_quantity']
+        product_stats['avg_quantity_per_order'] = product_stats['net_quantity'] / product_stats['orders']
         
         # Days on market
         product_stats['days_on_market'] = (
@@ -55,9 +87,9 @@ class ProductAnalyzer:
             self.current_date - product_stats['last_sale']
         ).dt.days
         
-        # Sales velocity (units per day)
+        # Sales velocity (units per day) - using net quantity
         product_stats['sales_velocity'] = (
-            product_stats['quantity_sold'] / product_stats['days_on_market']
+            product_stats['net_quantity'] / product_stats['days_on_market']
         ).replace([np.inf, -np.inf], 0)
         
         result = product_stats.sort_values('revenue', ascending=False)
@@ -109,7 +141,7 @@ class ProductAnalyzer:
         
         fast_movers = product_stats.nlargest(n, 'sales_velocity')[
             ['item_code', 'item_name', 'category', 'sales_velocity', 
-             'quantity_sold', 'revenue', 'orders', 'last_sale']
+             'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue', 'orders', 'last_sale']
         ]
         
         return fast_movers
@@ -123,7 +155,7 @@ class ProductAnalyzer:
         
         slow_movers = product_stats.nsmallest(n, 'sales_velocity')[
             ['item_code', 'item_name', 'category', 'sales_velocity',
-             'quantity_sold', 'revenue', 'days_since_last_sale', 'last_sale']
+             'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue', 'days_since_last_sale', 'last_sale']
         ]
         
         return slow_movers
@@ -181,6 +213,9 @@ class ProductAnalyzer:
                 'lifecycle_stage': stage,
                 'trend': trend,
                 'days_on_market': days_on_market,
+                'quantity_sold': product['quantity_sold'],
+                'refund_quantity': product['refund_quantity'],
+                'net_quantity': product['net_quantity'],
                 'revenue': product['revenue'],
                 'sales_velocity': product['sales_velocity']
             })
@@ -237,7 +272,7 @@ class ProductAnalyzer:
         return product_stats[
             ['item_code', 'item_name', 'category', 'inventory_signal',
              'sales_velocity', 'recommended_reorder_qty', 'days_since_last_sale',
-             'quantity_sold', 'revenue']
+             'quantity_sold', 'refund_quantity', 'net_quantity', 'revenue']
         ].sort_values('sales_velocity', ascending=False)
     
     def get_product_demand_trends(self, item_name: str) -> pd.DataFrame:
@@ -350,9 +385,11 @@ class ProductAnalyzer:
     
     def get_product_penetration(self) -> pd.DataFrame:
         """Calculate customer penetration rate for each product."""
-        total_customers = self.data['customer_name'].nunique()
+        # Use only sales data (exclude refunds) for penetration
+        sales_data = self.data[~self.data['is_refund']]
+        total_customers = sales_data['customer_name'].nunique()
         
-        product_penetration = self.data.groupby(['item_code', 'item_name', 'category']).agg({
+        product_penetration = sales_data.groupby(['item_code', 'item_name', 'category']).agg({
             'customer_name': 'nunique',
             'total': 'sum',
             'quantity': 'sum'
@@ -368,4 +405,32 @@ class ProductAnalyzer:
         ).round(2)
         
         return product_penetration.sort_values('penetration_rate_pct', ascending=False)
+    
+    def get_high_refund_products(self, min_sales: int = 10, min_refund_rate: float = 5.0) -> pd.DataFrame:
+        """
+        Identify products with high refund rates.
+        
+        Args:
+            min_sales: Minimum number of sales orders to consider
+            min_refund_rate: Minimum refund rate percentage to flag
+        
+        Returns:
+            DataFrame with products sorted by refund rate
+        """
+        product_stats = self.get_product_summary()
+        
+        # Filter products with sufficient sales and high refund rates
+        high_refund = product_stats[
+            (product_stats['orders'] >= min_sales) &
+            (product_stats['refund_rate_pct'] >= min_refund_rate)
+        ].copy()
+        
+        # Sort by refund rate
+        high_refund = high_refund.sort_values('refund_rate_pct', ascending=False)
+        
+        return high_refund[
+            ['item_code', 'item_name', 'category', 'orders', 'refund_orders',
+             'gross_revenue', 'refund_amount', 'revenue', 'refund_rate_pct',
+             'quantity_sold', 'refund_quantity']
+        ]
 

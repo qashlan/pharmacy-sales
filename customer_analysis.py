@@ -24,12 +24,17 @@ class CustomerAnalyzer:
         self._customer_summary_cache: Optional[pd.DataFrame] = None
         
     def get_customer_summary(self) -> pd.DataFrame:
-        """Get summary statistics for each customer. (CACHED)"""
+        """Get summary statistics for each customer with refund handling. (CACHED)"""
         # Return cached result if available
         if self._customer_summary_cache is not None:
             return self._customer_summary_cache
         
-        customer_stats = self.data.groupby('customer_name').agg({
+        # Separate refunds from sales
+        sales_data = self.data[~self.data['is_refund']]
+        refunds_data = self.data[self.data['is_refund']]
+        
+        # Calculate sales metrics
+        customer_stats = sales_data.groupby('customer_name').agg({
             'order_id': 'nunique',
             'total': 'sum',
             'quantity': 'sum',
@@ -39,9 +44,32 @@ class CustomerAnalyzer:
         
         # Flatten column names
         customer_stats.columns = [
-            'customer_name', 'total_orders', 'total_spent', 'total_items',
+            'customer_name', 'total_orders', 'gross_spent', 'total_items',
             'first_purchase', 'last_purchase', 'unique_products'
         ]
+        
+        # Calculate refund metrics per customer
+        customer_refunds = refunds_data.groupby('customer_name').agg({
+            'total': lambda x: abs(x.sum()),
+            'order_id': 'nunique',
+            'quantity': lambda x: abs(x.sum())
+        }).reset_index()
+        customer_refunds.columns = ['customer_name', 'refund_amount', 'refund_orders', 'refund_quantity']
+        
+        # Merge refund data
+        customer_stats = customer_stats.merge(customer_refunds, on='customer_name', how='left')
+        customer_stats['refund_amount'] = customer_stats['refund_amount'].fillna(0)
+        customer_stats['refund_orders'] = customer_stats['refund_orders'].fillna(0).astype(int)
+        customer_stats['refund_quantity'] = customer_stats['refund_quantity'].fillna(0)
+        
+        # Calculate net spending
+        customer_stats['total_spent'] = customer_stats['gross_spent'] - customer_stats['refund_amount']
+        customer_stats['net_items'] = customer_stats['total_items'] - customer_stats['refund_quantity']
+        
+        # Calculate refund rate
+        customer_stats['refund_rate_pct'] = (
+            customer_stats['refund_amount'] / customer_stats['gross_spent'] * 100
+        ).fillna(0)
         
         # Calculate additional metrics
         customer_stats['avg_order_value'] = customer_stats['total_spent'] / customer_stats['total_orders']
@@ -49,9 +77,11 @@ class CustomerAnalyzer:
             customer_stats['last_purchase'] - customer_stats['first_purchase']
         ).dt.days + 1
         
-        # Days since last purchase
+        # Days since last purchase (use all data including refunds for recency)
+        all_dates = self.data.groupby('customer_name')['date'].max()
+        customer_stats = customer_stats.set_index('customer_name').join(all_dates.rename('most_recent_activity')).reset_index()
         customer_stats['days_since_last_purchase'] = (
-            self.current_date - customer_stats['last_purchase']
+            self.current_date - customer_stats['most_recent_activity']
         ).dt.days
         
         # Purchase frequency (orders per month)
