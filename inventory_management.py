@@ -393,17 +393,26 @@ class InventoryManager:
         
         df = self.calculate_reorder_points()
         
+        # Calculate current inventory value for each item
+        if 'selling_price' in df.columns:
+            df['inventory_value'] = (
+                df['quantity'] * 
+                pd.to_numeric(df['selling_price'], errors='coerce').fillna(0)
+            )
+        else:
+            df['inventory_value'] = 0
+        
         # Group by category
         category_stats = df.groupby('category').agg({
             'quantity': 'sum',
             'total_quantity_sold': 'sum',
             'total_revenue': 'sum',
-            'daily_sales_velocity': 'mean',
-            'item_code': 'count'
+            'item_code': 'count',
+            'inventory_value': 'sum'
         }).reset_index()
         
         category_stats.columns = ['category', 'stock_on_hand', 'total_sold', 
-                                  'total_revenue', 'avg_daily_velocity', 'num_items']
+                                  'total_revenue', 'num_items', 'current_value']
         
         # Calculate inventory turnover
         category_stats['inventory_turnover'] = np.where(

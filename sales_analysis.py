@@ -60,9 +60,31 @@ class SalesAnalyzer:
         self.order_id_range = (min_order_id, max_order_id)
         self.unique_order_count = unique_orders
     
-    def get_overall_metrics(self) -> Dict:
-        """Calculate overall sales metrics with refund handling."""
-        df = self.data
+    def filter_by_month(self, month: Optional[str] = None) -> pd.DataFrame:
+        """
+        Filter data by specific month.
+        
+        Args:
+            month: Month in YYYY-MM format (e.g., '2024-01'). If None, returns all data.
+        
+        Returns:
+            Filtered DataFrame
+        """
+        if month is None:
+            return self.data
+        
+        df = self.data.copy()
+        df['year_month'] = df['date'].dt.strftime('%Y-%m')
+        return df[df['year_month'] == month]
+    
+    def get_overall_metrics(self, month: Optional[str] = None) -> Dict:
+        """
+        Calculate overall sales metrics with refund handling.
+        
+        Args:
+            month: Optional month in YYYY-MM format. If None, calculates for all data.
+        """
+        df = self.filter_by_month(month)
         
         # Separate refunds from regular sales
         sales_df = df[~df['is_refund']]
@@ -179,22 +201,48 @@ class SalesAnalyzer:
         return weekly
     
     def get_monthly_trends(self) -> pd.DataFrame:
-        """Calculate monthly sales trends. (CACHED)"""
+        """Calculate monthly sales trends with refund tracking. (CACHED)"""
         if self._monthly_trends_cache is not None:
             return self._monthly_trends_cache
         
         df = self.data.copy()
         df['year_month'] = df['date'].dt.strftime('%Y-%m')
         
-        monthly = df.groupby('year_month').agg({
+        # Separate sales and refunds
+        sales_df = df[~df['is_refund']].copy()
+        refunds_df = df[df['is_refund']].copy()
+        
+        # Calculate sales metrics
+        monthly_sales = sales_df.groupby('year_month').agg({
             'total': 'sum',
             'order_id': 'nunique',
             'customer_name': 'nunique',
             'quantity': 'sum',
             'date': 'min'
         }).reset_index()
+        monthly_sales.columns = ['year_month', 'gross_revenue', 'sales_orders', 'customers', 'items_sold', 'month_start']
         
-        monthly.columns = ['year_month', 'revenue', 'orders', 'customers', 'items_sold', 'month_start']
+        # Calculate refund metrics
+        monthly_refunds = refunds_df.groupby('year_month').agg({
+            'total': lambda x: abs(x.sum()),
+            'order_id': 'nunique',
+            'quantity': lambda x: abs(x.sum())
+        }).reset_index()
+        monthly_refunds.columns = ['year_month', 'refund_amount', 'refund_orders', 'items_refunded']
+        
+        # Merge sales and refunds
+        monthly = monthly_sales.merge(monthly_refunds, on='year_month', how='left')
+        
+        # Fill NaN values with 0 for months with no refunds
+        monthly['refund_amount'] = monthly['refund_amount'].fillna(0)
+        monthly['refund_orders'] = monthly['refund_orders'].fillna(0).astype(int)
+        monthly['items_refunded'] = monthly['items_refunded'].fillna(0)
+        
+        # Calculate net revenue and other metrics
+        monthly['revenue'] = monthly['gross_revenue'] - monthly['refund_amount']  # Net revenue
+        monthly['orders'] = monthly['sales_orders']  # Total orders (for compatibility)
+        monthly['refund_rate'] = (monthly['refund_amount'] / monthly['gross_revenue'] * 100).round(2)
+        
         monthly = monthly.sort_values('month_start')
         
         # Calculate growth
@@ -204,7 +252,7 @@ class SalesAnalyzer:
         self._monthly_trends_cache = monthly
         return monthly
     
-    def get_top_products(self, n: int = 10, metric: str = 'revenue') -> pd.DataFrame:
+    def get_top_products(self, n: int = 10, metric: str = 'revenue', month: Optional[str] = None) -> pd.DataFrame:
         """
         Get top products by specified metric.
         
@@ -217,9 +265,13 @@ class SalesAnalyzer:
         Args:
             n: Number of top products to return
             metric: 'revenue', 'quantity', or 'orders'
+            month: Optional month in YYYY-MM format. If None, calculates for all data.
         """
+        # Filter by month if specified
+        filtered_data = self.filter_by_month(month)
+        
         # Filter out refunds for top products analysis
-        sales_data = self.data[~self.data['is_refund']].copy()
+        sales_data = filtered_data[~filtered_data['is_refund']].copy()
         
         # Determine which columns are available
         agg_dict = {
@@ -284,9 +336,18 @@ class SalesAnalyzer:
         
         return top
     
-    def get_top_categories(self, n: int = 10) -> pd.DataFrame:
-        """Get top product categories by revenue."""
-        top_cat = self.data.groupby('category').agg({
+    def get_top_categories(self, n: int = 10, month: Optional[str] = None) -> pd.DataFrame:
+        """
+        Get top product categories by revenue.
+        
+        Args:
+            n: Number of top categories to return
+            month: Optional month in YYYY-MM format. If None, calculates for all data.
+        """
+        # Filter by month if specified
+        filtered_data = self.filter_by_month(month)
+        
+        top_cat = filtered_data.groupby('category').agg({
             'total': 'sum',
             'quantity': 'sum',
             'order_id': 'nunique',
@@ -296,8 +357,8 @@ class SalesAnalyzer:
         top_cat.columns = ['category', 'revenue', 'quantity', 'orders', 'unique_products']
         top_cat = top_cat.sort_values('revenue', ascending=False).head(n)
         
-        # Calculate percentage of total
-        total_revenue = self.data['total'].sum()
+        # Calculate percentage of total (using filtered data)
+        total_revenue = filtered_data['total'].sum()
         top_cat['revenue_pct'] = (top_cat['revenue'] / total_revenue * 100).round(2)
         
         return top_cat
@@ -770,34 +831,64 @@ class SalesAnalyzer:
     
     def get_monthly_category_breakdown(self) -> pd.DataFrame:
         """
-        Get monthly sales breakdown by category.
+        Get monthly sales breakdown by category with refund tracking.
         
         Returns DataFrame with columns:
         - year_month: Month in YYYY-MM format
         - month_name: Human-readable month name
         - category: Product category
-        - revenue: Total revenue for that category in that month
+        - revenue: Total revenue for that category in that month (gross)
         - quantity: Total quantity sold
         - orders: Number of unique orders
         - avg_order_value: Average order value
+        - refund_amount: Total refunds for that category
+        - refund_quantity: Total quantity refunded
+        - net_revenue: Revenue after refunds
         """
-        # Exclude refunds
-        df = self.data[~self.data['is_refund']].copy()
+        df = self.data.copy()
         
         # Add month columns
         df['year_month'] = df['date'].dt.strftime('%Y-%m')
         df['month_name'] = df['date'].dt.strftime('%B %Y')
         df['month_start'] = df['date'].dt.to_period('M').dt.to_timestamp()
         
-        # Group by month and category
-        monthly_category = df.groupby(['year_month', 'month_name', 'month_start', 'category']).agg({
+        # Separate sales and refunds
+        sales_df = df[~df['is_refund']].copy()
+        refunds_df = df[df['is_refund']].copy()
+        
+        # Group sales by month and category
+        monthly_sales = sales_df.groupby(['year_month', 'month_name', 'month_start', 'category']).agg({
             'total': 'sum',
             'quantity': 'sum',
             'order_id': 'nunique'
         }).reset_index()
+        monthly_sales.columns = ['year_month', 'month_name', 'month_start', 'category', 
+                                 'revenue', 'quantity', 'orders']
         
-        monthly_category.columns = ['year_month', 'month_name', 'month_start', 'category', 
-                                    'revenue', 'quantity', 'orders']
+        # Group refunds by month and category
+        monthly_refunds = refunds_df.groupby(['year_month', 'month_start', 'category']).agg({
+            'total': lambda x: abs(x.sum()),
+            'quantity': lambda x: abs(x.sum())
+        }).reset_index()
+        monthly_refunds.columns = ['year_month', 'month_start', 'category', 
+                                   'refund_amount', 'refund_quantity']
+        
+        # Merge sales and refunds
+        monthly_category = monthly_sales.merge(
+            monthly_refunds[['year_month', 'category', 'refund_amount', 'refund_quantity']], 
+            on=['year_month', 'category'], 
+            how='left'
+        )
+        
+        # Fill NaN values with 0 for categories with no refunds
+        monthly_category['refund_amount'] = monthly_category['refund_amount'].fillna(0)
+        monthly_category['refund_quantity'] = monthly_category['refund_quantity'].fillna(0)
+        
+        # Calculate net revenue and refund rate
+        monthly_category['net_revenue'] = monthly_category['revenue'] - monthly_category['refund_amount']
+        monthly_category['refund_rate'] = (
+            monthly_category['refund_amount'] / monthly_category['revenue'] * 100
+        ).round(2).fillna(0)
         
         # Calculate average order value
         monthly_category['avg_order_value'] = (

@@ -226,10 +226,23 @@ def get_cross_sell_analyzer(data, _enable_sampling=True, _max_records=100000):
     return CrossSellAnalyzer(data, enable_sampling=_enable_sampling, max_records=_max_records)
 
 
-@st.cache_resource
 def get_ai_query_engine(data):
-    """Create and cache AIQueryEngine instance."""
-    return AIQueryEngine(data)
+    """Create and cache AIQueryEngine instance in session state."""
+    # Use a hash of the data shape to detect data changes
+    data_hash = f"{len(data)}_{data.columns.tolist()}"
+    
+    # Initialize or retrieve from session state
+    if 'ai_query_engine' not in st.session_state:
+        st.session_state.ai_query_engine = None
+        st.session_state.ai_query_engine_data_hash = None
+    
+    # Create new engine if data has changed or engine doesn't exist
+    if (st.session_state.ai_query_engine is None or 
+        st.session_state.ai_query_engine_data_hash != data_hash):
+        st.session_state.ai_query_engine = AIQueryEngine(data)
+        st.session_state.ai_query_engine_data_hash = data_hash
+    
+    return st.session_state.ai_query_engine
 
 
 def display_metrics(metrics):
@@ -271,7 +284,7 @@ def sales_analysis_page(data):
     
     analyzer = get_sales_analyzer(data)
     
-    # Overall metrics
+    # Overall metrics (always show all-time data)
     st.subheader(t('overall_performance'))
     metrics = analyzer.get_overall_metrics()
     display_metrics(metrics)
@@ -346,33 +359,83 @@ def sales_analysis_page(data):
     with tab2:
         st.subheader(t('top_performing_products'))
         
-        metric_choice = st.radio(
-            t('sort_by'),
-            [t('revenue'), t('quantity'), t('orders')],
-            horizontal=True,
-            key='sales_top_products_metric'
-        )
+        # Month filter selector (inside Top Products tab only)
+        # Get available months
+        available_months = analyzer.get_available_months()
         
-        n_products = st.slider(t('number_of_products'), 5, 100, 10, key='sales_top_products_slider')
+        # Create month options: "All Time" + individual months
+        month_options = ["All Time"] + [
+            f"{month} ({pd.to_datetime(month).strftime('%B %Y')})"
+            for month in available_months
+        ]
         
-        if metric_choice == t('revenue'):
-            top_products = analyzer.get_top_products(n_products, 'revenue')
-        elif metric_choice == t('quantity'):
-            top_products = analyzer.get_top_products(n_products, 'quantity')
+        # Filter controls in a clean layout
+        filter_col1, filter_col2, filter_col3 = st.columns([2, 2, 2])
+        
+        with filter_col1:
+            selected_option = st.selectbox(
+                "📅 Time Period",
+                options=month_options,
+                index=0,
+                key='top_products_month_filter',
+                help="Select a specific month or view all-time data"
+            )
+        
+        # Extract actual month value (YYYY-MM format or None for "All Time")
+        if selected_option == "All Time":
+            selected_month = None
+            period_label = "All Time"
+            period_count = f"({len(available_months)} months)"
         else:
-            top_products = analyzer.get_top_products(n_products, 'orders')
+            # Extract YYYY-MM from "YYYY-MM (Month YYYY)" format
+            selected_month = selected_option.split(" ")[0]
+            period_label = pd.to_datetime(selected_month).strftime('%B %Y')
+            period_count = ""
         
-        # Bar chart
-        fig = px.bar(
-            top_products,
-            x='item_name',
-            y='revenue',
-            title=f"Top {n_products} Products by {metric_choice}",
-            color='revenue',
-            color_continuous_scale='Blues'
-        )
-        fig.update_xaxes(tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        with filter_col2:
+            metric_choice = st.selectbox(
+                "📊 Sort By",
+                options=[t('revenue'), t('quantity'), t('orders')],
+                index=0,
+                key='sales_top_products_metric',
+                help="Choose metric to sort products by"
+            )
+        
+        with filter_col3:
+            n_products = st.slider(
+                "🔢 Number of Products",
+                min_value=5,
+                max_value=100,
+                value=10,
+                step=5,
+                key='sales_top_products_slider',
+                help="Adjust number of products to display"
+            )
+        
+        # Display period summary
+        if selected_month:
+            st.info(f"📊 Showing top {n_products} products for **{period_label}** sorted by **{metric_choice}**")
+        else:
+            st.info(f"📊 Showing top {n_products} products for **All Time** {period_count} sorted by **{metric_choice}**")
+        
+        st.markdown("")  # Add spacing
+        
+        # Get top products based on selected filters
+        if metric_choice == t('revenue'):
+            top_products = analyzer.get_top_products(n_products, 'revenue', month=selected_month)
+            chart_metric = 'revenue'
+            chart_metric_label = 'Revenue ($)'
+        elif metric_choice == t('quantity'):
+            top_products = analyzer.get_top_products(n_products, 'quantity', month=selected_month)
+            chart_metric = 'quantity'
+            chart_metric_label = 'Quantity Sold'
+        else:
+            top_products = analyzer.get_top_products(n_products, 'orders', month=selected_month)
+            chart_metric = 'orders'
+            chart_metric_label = 'Number of Orders'
+        
+        # Data table section
+        st.markdown(f"### 📋 Detailed Product Data")
         
         # Data table with renamed columns
         top_products_display = top_products.copy()
@@ -383,26 +446,49 @@ def sales_analysis_page(data):
             'pieces': 'Pieces',
             'quantity': 'Quantity ⭐',
             'price_per_unit': 'Price Per Unit',
-            'revenue': 'Revenue',
+            'revenue': 'Revenue ($)',
             'orders': 'Orders'
         }
         top_products_display = top_products_display.rename(columns={
             k: v for k, v in column_renames.items() if k in top_products_display.columns
         })
-        st.dataframe(format_datetime_columns(top_products_display), use_container_width=True, hide_index=True)
+        
+        # Format revenue column if present
+        if 'Revenue ($)' in top_products_display.columns:
+            top_products_display['Revenue ($)'] = top_products_display['Revenue ($)'].apply(lambda x: f"${x:,.2f}")
+        if 'Price Per Unit' in top_products_display.columns:
+            top_products_display['Price Per Unit'] = top_products_display['Price Per Unit'].apply(lambda x: f"${x:,.2f}")
+        
+        st.dataframe(
+            format_datetime_columns(top_products_display),
+            use_container_width=True,
+            hide_index=True,
+            height=400
+        )
         st.caption("⭐ Quantity is the total sold (Units and Pieces are informational)")
         
-        # Top categories
-        st.subheader(t('top_categories'))
-        top_categories = analyzer.get_top_categories(10)
+        # Divider
+        st.markdown("---")
         
-        fig_cat = px.pie(
-            top_categories,
-            values='revenue',
-            names='category',
-            title=t('revenue_by_category')
+        # Bar chart with dynamic title
+        chart_title = f"Top {n_products} Products by {metric_choice.title()}"
+        if selected_month:
+            chart_title += f" - {period_label}"
+        else:
+            chart_title += " - All Time"
+        
+        fig = px.bar(
+            top_products,
+            x='item_name',
+            y=chart_metric if chart_metric in top_products.columns else 'revenue',
+            title=chart_title,
+            color=chart_metric if chart_metric in top_products.columns else 'revenue',
+            color_continuous_scale='Blues',
+            labels={'item_name': 'Product', chart_metric: chart_metric_label}
         )
-        st.plotly_chart(fig_cat, use_container_width=True)
+        fig.update_xaxes(tickangle=-45)
+        fig.update_layout(showlegend=False, height=500)
+        st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
         st.subheader(t('time_based_patterns'))
@@ -571,8 +657,7 @@ def sales_analysis_page(data):
                 st.metric(
                     t('total_refunds'),
                     f"${refund_analysis['total_refund_amount']:,.2f}",
-                    delta=f"-{refund_analysis['refund_rate_pct']:.1f}%",
-                    delta_color="inverse"
+                    delta=f"-{refund_analysis['refund_rate_pct']:.1f}%"
                 )
             with col2:
                 st.metric(
@@ -855,7 +940,38 @@ def monthly_analysis_page(data):
         monthly_trends = analyzer.get_monthly_trends()
         
         if len(monthly_trends) > 0:
-            # Revenue trend chart
+            # Show data table first with refunds
+            display_monthly = monthly_trends[[
+                'year_month', 'gross_revenue', 'refund_amount', 'revenue', 'refund_rate',
+                'orders', 'refund_orders', 'customers', 'items_sold', 'items_refunded', 'mom_growth'
+            ]].copy()
+            
+            display_monthly.columns = [
+                'Month', 'Gross Revenue', 'Refunds', 'Net Revenue', 'Refund Rate %',
+                'Orders', 'Refund Orders', 'Customers', 'Items Sold', 'Items Refunded', 'MoM Growth %'
+            ]
+            
+            st.dataframe(
+                display_monthly.style.format({
+                    'Gross Revenue': '${:,.2f}',
+                    'Refunds': '${:,.2f}',
+                    'Net Revenue': '${:,.2f}',
+                    'Refund Rate %': '{:.2f}%',
+                    'Orders': '{:,.0f}',
+                    'Refund Orders': '{:,.0f}',
+                    'Customers': '{:,.0f}',
+                    'Items Sold': '{:,.0f}',
+                    'Items Refunded': '{:,.0f}',
+                    'MoM Growth %': '{:+.2f}%'
+                }).applymap(
+                    lambda x: 'background-color: #ffe6e6' if 'Refund' in str(x) else '',
+                    subset=['Refunds', 'Refund Orders', 'Items Refunded', 'Refund Rate %']
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Revenue trend chart below table
             fig = go.Figure()
             
             fig.add_trace(go.Bar(
@@ -876,27 +992,6 @@ def monthly_analysis_page(data):
             )
             
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Show data table
-            display_monthly = monthly_trends[[
-                'year_month', 'revenue', 'orders', 'customers', 'items_sold', 'mom_growth'
-            ]].copy()
-            
-            display_monthly.columns = [
-                'Month', 'Revenue', 'Orders', 'Customers', 'Items Sold', 'MoM Growth %'
-            ]
-            
-            st.dataframe(
-                display_monthly.style.format({
-                    'Revenue': '${:,.2f}',
-                    'Orders': '{:,.0f}',
-                    'Customers': '{:,.0f}',
-                    'Items Sold': '{:,.0f}',
-                    'MoM Growth %': '{:+.2f}%'
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
         else:
             st.info("No monthly trend data available")
     
@@ -907,49 +1002,69 @@ def monthly_analysis_page(data):
         monthly_category = analyzer.get_monthly_category_breakdown()
         
         if len(monthly_category) > 0:
-            # Month selector for detailed view
-            selected_month = st.selectbox(
+            # Month selector for detailed view with "All Time" option
+            month_options = ["All Time"] + available_months
+            
+            selected_option = st.selectbox(
                 "Select Month for Detailed Category Breakdown",
-                options=available_months,
-                index=len(available_months) - 1,  # Default to latest month
-                format_func=lambda x: pd.to_datetime(x).strftime('%B %Y'),
+                options=month_options,
+                index=0,  # Default to "All Time"
+                format_func=lambda x: x if x == "All Time" else pd.to_datetime(x).strftime('%B %Y'),
                 key='monthly_category_selector'
             )
             
-            # Filter for selected month
-            month_data = monthly_category[monthly_category['year_month'] == selected_month]
+            # Filter for selected month or aggregate all
+            if selected_option == "All Time":
+                # Aggregate all months
+                month_data = monthly_category.groupby('category').agg({
+                    'revenue': 'sum',
+                    'quantity': 'sum',
+                    'orders': 'sum',
+                    'refund_amount': 'sum',
+                    'refund_quantity': 'sum'
+                }).reset_index()
+                month_data['avg_order_value'] = month_data['revenue'] / month_data['orders']
+                month_data['net_revenue'] = month_data['revenue'] - month_data['refund_amount']
+                month_data['refund_rate'] = (month_data['refund_amount'] / month_data['revenue'] * 100).round(2).fillna(0)
+                period_label = "All Time"
+            else:
+                # Filter for selected month
+                month_data = monthly_category[monthly_category['year_month'] == selected_option]
+                period_label = pd.to_datetime(selected_option).strftime('%B %Y')
             
             if len(month_data) > 0:
-                col1, col2 = st.columns([2, 1])
-                
+                # Category summary metrics
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    # Pie chart of category spending
-                    fig_pie = px.pie(
-                        month_data,
-                        values='revenue',
-                        names='category',
-                        title=f'Category Distribution - {pd.to_datetime(selected_month).strftime("%B %Y")}',
-                        hole=0.4
-                    )
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                
+                    st.metric("Gross Revenue", f"${month_data['revenue'].sum():,.2f}")
                 with col2:
-                    # Category summary metrics
-                    st.metric("Total Revenue", f"${month_data['revenue'].sum():,.2f}")
+                    st.metric("Total Refunds", f"${month_data['refund_amount'].sum():,.2f}", 
+                             delta=f"-{month_data['refund_amount'].sum() / month_data['revenue'].sum() * 100:.1f}%")
+                with col3:
+                    st.metric("Net Revenue", f"${month_data['net_revenue'].sum():,.2f}")
+                with col4:
                     st.metric("Total Categories", len(month_data))
-                    st.metric("Total Orders", f"{month_data['orders'].sum():,.0f}")
                 
-                # Detailed category table
+                # Detailed category table with refunds
                 st.markdown("#### Category Details")
-                display_categories = month_data[['category', 'revenue', 'quantity', 'orders', 'avg_order_value']].copy()
+                display_categories = month_data[['category', 'revenue', 'refund_amount', 'net_revenue', 
+                                                  'refund_rate', 'quantity', 'refund_quantity', 
+                                                  'orders', 'avg_order_value']].copy()
                 display_categories['revenue_pct'] = (display_categories['revenue'] / display_categories['revenue'].sum() * 100).round(2)
+                display_categories = display_categories.sort_values('revenue', ascending=False)
                 
-                display_categories.columns = ['Category', 'Revenue', 'Quantity', 'Orders', 'Avg Order Value', 'Revenue %']
+                display_categories.columns = ['Category', 'Gross Revenue', 'Refunds', 'Net Revenue', 
+                                               'Refund Rate %', 'Quantity', 'Qty Refunded', 
+                                               'Orders', 'Avg Order Value', 'Revenue %']
                 
                 st.dataframe(
                     display_categories.style.format({
-                        'Revenue': '${:,.2f}',
+                        'Gross Revenue': '${:,.2f}',
+                        'Refunds': '${:,.2f}',
+                        'Net Revenue': '${:,.2f}',
+                        'Refund Rate %': '{:.2f}%',
                         'Quantity': '{:,.0f}',
+                        'Qty Refunded': '{:,.0f}',
                         'Orders': '{:,.0f}',
                         'Avg Order Value': '${:,.2f}',
                         'Revenue %': '{:.2f}%'
@@ -957,6 +1072,17 @@ def monthly_analysis_page(data):
                     use_container_width=True,
                     hide_index=True
                 )
+                
+                # Pie chart of category spending (below table)
+                st.markdown("---")
+                fig_pie = px.pie(
+                    month_data,
+                    values='revenue',
+                    names='category',
+                    title=f'Category Distribution - {period_label}',
+                    hole=0.4
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
             
             # Stacked bar chart for all months
             st.markdown("#### Category Spending Trend Across All Months")
@@ -1095,38 +1221,6 @@ def monthly_analysis_page(data):
                     category_comp = comparison['category_comparison']
                     
                     if len(category_comp) > 0:
-                        # Side-by-side bar chart
-                        fig_compare = go.Figure()
-                        
-                        fig_compare.add_trace(go.Bar(
-                            x=category_comp['category'],
-                            y=category_comp['revenue_m1'],
-                            name=month1_name,
-                            marker=dict(color='#1f77b4'),
-                            text=category_comp['revenue_m1'].apply(lambda x: f'${x:,.0f}'),
-                            textposition='auto'
-                        ))
-                        
-                        fig_compare.add_trace(go.Bar(
-                            x=category_comp['category'],
-                            y=category_comp['revenue_m2'],
-                            name=month2_name,
-                            marker=dict(color='#ff7f0e'),
-                            text=category_comp['revenue_m2'].apply(lambda x: f'${x:,.0f}'),
-                            textposition='auto'
-                        ))
-                        
-                        fig_compare.update_layout(
-                            title='Category Revenue Comparison',
-                            xaxis_title='Category',
-                            yaxis_title='Revenue ($)',
-                            barmode='group',
-                            height=500,
-                            hovermode='x unified'
-                        )
-                        
-                        st.plotly_chart(fig_compare, use_container_width=True)
-                        
                         # Detailed comparison table
                         st.markdown("#### Detailed Category Comparison")
                         display_comp = category_comp[[
@@ -1164,6 +1258,38 @@ def monthly_analysis_page(data):
                             use_container_width=True,
                             hide_index=True
                         )
+                        
+                        # Side-by-side bar chart
+                        fig_compare = go.Figure()
+                        
+                        fig_compare.add_trace(go.Bar(
+                            x=category_comp['category'],
+                            y=category_comp['revenue_m1'],
+                            name=month1_name,
+                            marker=dict(color='#1f77b4'),
+                            text=category_comp['revenue_m1'].apply(lambda x: f'${x:,.0f}'),
+                            textposition='auto'
+                        ))
+                        
+                        fig_compare.add_trace(go.Bar(
+                            x=category_comp['category'],
+                            y=category_comp['revenue_m2'],
+                            name=month2_name,
+                            marker=dict(color='#ff7f0e'),
+                            text=category_comp['revenue_m2'].apply(lambda x: f'${x:,.0f}'),
+                            textposition='auto'
+                        ))
+                        
+                        fig_compare.update_layout(
+                            title='Category Revenue Comparison',
+                            xaxis_title='Category',
+                            yaxis_title='Revenue ($)',
+                            barmode='group',
+                            height=500,
+                            hovermode='x unified'
+                        )
+                        
+                        st.plotly_chart(fig_compare, use_container_width=True)
                         
                         # Download comparison
                         csv_comparison = category_comp.to_csv(index=False)
@@ -1486,7 +1612,7 @@ def product_analysis_page(data):
         st.metric("Total Quantity Sold", f"{total_sold:,.0f}")
     with col3:
         total_refunded = product_summary['refund_quantity'].sum()
-        st.metric("Total Refunded", f"{total_refunded:,.0f}", delta=f"-{total_refunded:,.0f}", delta_color="inverse")
+        st.metric("Total Refunded", f"{total_refunded:,.0f}")
     with col4:
         net_quantity = product_summary['net_quantity'].sum()
         st.metric("Net Quantity", f"{net_quantity:,.0f}")
@@ -1568,7 +1694,7 @@ def product_analysis_page(data):
                 with col_s2:
                     st.metric("Total Sold", f"{total_fast_quantity:,.0f}")
                 with col_s3:
-                    st.metric("Total Refunded", f"{total_fast_refunded:,.0f}", delta_color="inverse")
+                    st.metric("Total Refunded", f"{total_fast_refunded:,.0f}")
                 with col_s4:
                     st.metric("Net Quantity", f"{total_fast_net:,.0f}")
             else:
@@ -1614,7 +1740,7 @@ def product_analysis_page(data):
                 with col_s2:
                     st.metric("Total Sold", f"{total_slow_quantity:,.0f}")
                 with col_s3:
-                    st.metric("Total Refunded", f"{total_slow_refunded:,.0f}", delta_color="inverse")
+                    st.metric("Total Refunded", f"{total_slow_refunded:,.0f}")
                 with col_s4:
                     st.metric("Net Quantity", f"{total_slow_net:,.0f}")
                 with col_s5:
@@ -1860,8 +1986,8 @@ def inventory_management_page(data):
         st.metric(t('inventory_value'), f"${summary['total_inventory_value']:,.2f}")
         st.metric(t('avg_days_stock'), f"{summary['avg_days_of_stock']:.1f}")
     with col3:
-        st.metric(t('out_of_stock'), f"{summary['items_out_of_stock']:,}", delta=None, delta_color="inverse")
-        st.metric(t('urgent_reorder'), f"{summary['items_urgent_reorder']:,}", delta=None, delta_color="inverse")
+        st.metric(t('out_of_stock'), f"{summary['items_out_of_stock']:,}", delta=None)
+        st.metric(t('urgent_reorder'), f"{summary['items_urgent_reorder']:,}", delta=None)
     with col4:
         st.metric(t('reorder_soon'), f"{summary['items_reorder_soon']:,}")
         st.metric(t('items_ok'), f"{summary['items_ok']:,}", delta=None, delta_color="normal")
@@ -1870,14 +1996,57 @@ def inventory_management_page(data):
     
     # Tabs for different views
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        f"📁 {t('category_analysis')}",
         f"⚠️ {t('reorder_alerts')}",
         f"📉 {t('stockout_risk')}",
         f"📈 {t('overstocked_items')}",
-        f"📊 {t('abc_inventory_analysis')}",
-        f"📁 {t('category_analysis')}"
+        f"📊 {t('abc_inventory_analysis')}"
     ])
     
     with tab1:
+        st.subheader(f"📁 {t('inventory_by_category')}")
+        
+        # Get category analysis
+        category_df = manager.get_category_analysis()
+        
+        if len(category_df) > 0:
+            # Category table FIRST
+            st.dataframe(category_df, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            
+            # Category charts BELOW the table
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig = px.bar(
+                    category_df,
+                    x='category',
+                    y='stock_on_hand',
+                    title="Stock on Hand by Category",
+                    labels={'stock_on_hand': t('stock_on_hand'), 'category': t('category')},
+                    color='stock_on_hand',
+                    color_continuous_scale='Blues'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                fig = px.bar(
+                    category_df,
+                    x='category',
+                    y='inventory_turnover',
+                    title="Inventory Turnover by Category",
+                    labels={'inventory_turnover': t('inventory_turnover'), 'category': t('category')},
+                    color='inventory_turnover',
+                    color_continuous_scale='Greens'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Category information not available in inventory data")
+    
+    with tab2:
         st.subheader(f"⚠️ {t('reorder_recommendations')}")
         
         # Get reorder signals
@@ -1987,7 +2156,7 @@ def inventory_management_page(data):
             mime="text/csv"
         )
     
-    with tab2:
+    with tab3:
         st.subheader(t('stockout_forecast', days=config.STOCKOUT_FORECAST_DAYS))
         
         # Get stockout risk analysis
@@ -2048,7 +2217,7 @@ def inventory_management_page(data):
         else:
             st.success(f"✓ No items at risk of stockout in the next {config.STOCKOUT_FORECAST_DAYS} days!")
     
-    with tab3:
+    with tab4:
         st.subheader(f"📈 {t('overstock_analysis')}")
         
         # Get overstocked items
@@ -2100,7 +2269,7 @@ def inventory_management_page(data):
         else:
             st.success(f"✓ No overstocked items (>{config.OVERSTOCK_THRESHOLD_DAYS} days of stock)")
     
-    with tab4:
+    with tab5:
         st.subheader(f"📊 {t('abc_inventory_analysis')}")
         
         # Get ABC analysis
@@ -2155,47 +2324,6 @@ def inventory_management_page(data):
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity shows current stock | Total Sold shows historical sales | ABC Class based on revenue")
-    
-    with tab5:
-        st.subheader(f"📁 {t('inventory_by_category')}")
-        
-        # Get category analysis
-        category_df = manager.get_category_analysis()
-        
-        if len(category_df) > 0:
-            # Category charts
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                fig = px.bar(
-                    category_df,
-                    x='category',
-                    y='stock_on_hand',
-                    title="Stock on Hand by Category",
-                    labels={'stock_on_hand': t('stock_on_hand'), 'category': t('category')},
-                    color='stock_on_hand',
-                    color_continuous_scale='Blues'
-                )
-                fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                fig = px.bar(
-                    category_df,
-                    x='category',
-                    y='inventory_turnover',
-                    title="Inventory Turnover by Category",
-                    labels={'inventory_turnover': t('inventory_turnover'), 'category': t('category')},
-                    color='inventory_turnover',
-                    color_continuous_scale='Greens'
-                )
-                fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Category table
-            st.dataframe(category_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("Category information not available in inventory data")
 
 
 def rfm_analysis_page(data):
@@ -2277,25 +2405,6 @@ def rfm_analysis_page(data):
             st.write("**Actions:**")
             for action in recommendations.get('actions', []):
                 st.write(f"- {action}")
-        
-        # RFM visualization
-        st.subheader("RFM Distribution")
-        
-        fig = px.scatter_3d(
-            rfm_data,
-            x='recency',
-            y='frequency',
-            z='monetary',
-            color='segment',
-            hover_name='customer_name',
-            title='3D RFM Scatter Plot',
-            labels={
-                'recency': 'Recency (days)',
-                'frequency': 'Frequency (orders)',
-                'monetary': 'Monetary ($)'
-            }
-        )
-        st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
         st.subheader("📂 RFM Segmentation by Product Category")
@@ -2499,7 +2608,7 @@ def refill_prediction_page(data):
         st.metric(t('avg_interval'), f"{summary['avg_refill_interval_days']:.1f} {t('days')}")
     with col3:
         st.metric(t('overdue'), f"{summary['num_overdue_refills']:,}", 
-                 delta=f"{summary['num_overdue_refills']}", delta_color="inverse")
+                 delta=f"{summary['num_overdue_refills']}")
     with col4:
         st.metric(t('upcoming_30d'), f"{summary['num_upcoming_refills_30d']:,}")
     with col5:
@@ -2633,22 +2742,22 @@ def refill_prediction_page(data):
                 with col1:
                     likely_lost = status_counts.get('Likely Lost', 0)
                     st.metric(f"🔴 Likely Lost ({likely_lost_days}+ days)", likely_lost, 
-                             delta=f"{likely_lost} customers", delta_color="inverse")
+                             delta=f"{likely_lost} customers")
                 
                 with col2:
                     high_risk = status_counts.get('At High Risk', 0)
                     st.metric(f"🟠 At High Risk ({high_risk_days}-{likely_lost_days-1} days)", high_risk,
-                             delta=f"{high_risk} customers", delta_color="inverse")
+                             delta=f"{high_risk} customers")
                 
                 with col3:
                     at_risk = status_counts.get('At Risk', 0)
                     st.metric(f"🟡 At Risk ({at_risk_days}-{high_risk_days-1} days)", at_risk,
-                             delta=f"{at_risk} customers", delta_color="inverse")
+                             delta=f"{at_risk} customers")
                 
                 with col4:
                     action_needed = status_counts.get('Action Needed', 0)
                     st.metric(f"🟢 Action Needed (<{at_risk_days} days)", action_needed,
-                             delta=f"{action_needed} customers", delta_color="inverse")
+                             delta=f"{action_needed} customers")
                 
                 # All overdue visualization
                 st.markdown("---")
@@ -3294,6 +3403,11 @@ def ai_query_page(data):
         if 'chat_messages' not in st.session_state:
             st.session_state.chat_messages = []
         
+        # Synchronize session state with OpenAI assistant's internal history
+        # This ensures consistency if the engine was recreated
+        if len(st.session_state.chat_messages) != len(engine.openai_assistant.conversation_history):
+            engine.openai_assistant.conversation_history = st.session_state.chat_messages.copy()
+        
         # Display chat history
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"]):
@@ -3314,6 +3428,9 @@ def ai_query_page(data):
             
             # Add assistant response to history
             st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            
+            # Sync back to OpenAI assistant
+            engine.openai_assistant.conversation_history = st.session_state.chat_messages.copy()
         
         # Clear chat button
         if len(st.session_state.chat_messages) > 0:
