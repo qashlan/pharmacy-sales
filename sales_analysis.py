@@ -456,6 +456,66 @@ class SalesAnalyzer:
         # Calculate z-scores for interpretation
         daily['revenue_zscore'] = stats.zscore(daily['total'])
         daily['orders_zscore'] = stats.zscore(daily['num_orders'])
+        daily['quantity_zscore'] = stats.zscore(daily['quantity'])
+        
+        # Calculate baselines from normal days for comparison
+        normal_days = daily[~daily['is_anomaly']]
+        if len(normal_days) > 0:
+            avg_revenue = normal_days['total'].mean()
+            avg_orders = normal_days['num_orders'].mean()
+            avg_quantity = normal_days['quantity'].mean()
+            median_revenue = normal_days['total'].median()
+            median_orders = normal_days['num_orders'].median()
+            median_quantity = normal_days['quantity'].median()
+        else:
+            # Fallback if all days are anomalies
+            avg_revenue = daily['total'].mean()
+            avg_orders = daily['num_orders'].mean()
+            avg_quantity = daily['quantity'].mean()
+            median_revenue = daily['total'].median()
+            median_orders = daily['num_orders'].median()
+            median_quantity = daily['quantity'].median()
+        
+        # Generate detailed reasons for anomalies
+        def generate_reason(row):
+            if not row['is_anomaly']:
+                return ""
+            
+            reasons = []
+            
+            # Check revenue deviation
+            rev_diff_pct = ((row['total'] - avg_revenue) / avg_revenue * 100) if avg_revenue > 0 else 0
+            if abs(row['revenue_zscore']) > 2:
+                direction = "higher" if rev_diff_pct > 0 else "lower"
+                reasons.append(f"Revenue {direction} than normal ({rev_diff_pct:+.1f}%)")
+            
+            # Check orders deviation
+            ord_diff_pct = ((row['num_orders'] - avg_orders) / avg_orders * 100) if avg_orders > 0 else 0
+            if abs(row['orders_zscore']) > 2:
+                direction = "higher" if ord_diff_pct > 0 else "lower"
+                reasons.append(f"Orders {direction} than normal ({ord_diff_pct:+.1f}%)")
+            
+            # Check quantity deviation
+            qty_diff_pct = ((row['quantity'] - avg_quantity) / avg_quantity * 100) if avg_quantity > 0 else 0
+            if abs(row['quantity_zscore']) > 2:
+                direction = "higher" if qty_diff_pct > 0 else "lower"
+                reasons.append(f"Quantity {direction} than normal ({qty_diff_pct:+.1f}%)")
+            
+            # If no strong deviations in individual metrics, it's a combination
+            if not reasons:
+                reasons.append("Unusual combination of revenue, orders, and quantity")
+            
+            return "; ".join(reasons)
+        
+        daily['anomaly_reason'] = daily.apply(generate_reason, axis=1)
+        
+        # Add comparison columns
+        daily['avg_revenue'] = avg_revenue
+        daily['avg_orders'] = avg_orders
+        daily['avg_quantity'] = avg_quantity
+        daily['revenue_diff_pct'] = ((daily['total'] - avg_revenue) / avg_revenue * 100).round(1)
+        daily['orders_diff_pct'] = ((daily['num_orders'] - avg_orders) / avg_orders * 100).round(1)
+        daily['quantity_diff_pct'] = ((daily['quantity'] - avg_quantity) / avg_quantity * 100).round(1)
         
         return daily.sort_values('date')
     

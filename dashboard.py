@@ -285,7 +285,7 @@ def sales_analysis_page(data):
         st.subheader(t('revenue_trends'))
         
         # Time period selection
-        period = st.selectbox(t('select_period'), [t('daily'), t('weekly'), t('monthly')])
+        period = st.selectbox(t('select_period'), [t('daily'), t('weekly'), t('monthly')], key='sales_trends_period')
         
         if period == t('daily'):
             trends = analyzer.get_daily_trends()
@@ -349,10 +349,11 @@ def sales_analysis_page(data):
         metric_choice = st.radio(
             t('sort_by'),
             [t('revenue'), t('quantity'), t('orders')],
-            horizontal=True
+            horizontal=True,
+            key='sales_top_products_metric'
         )
         
-        n_products = st.slider(t('number_of_products'), 5, 100, 10)
+        n_products = st.slider(t('number_of_products'), 5, 100, 10, key='sales_top_products_slider')
         
         if metric_choice == t('revenue'):
             top_products = analyzer.get_top_products(n_products, 'revenue')
@@ -447,7 +448,8 @@ def sales_analysis_page(data):
         
         contamination = st.slider(
             t('anomaly_sensitivity'),
-            1, 10, 5
+            1, 10, 5,
+            key='sales_anomaly_sensitivity'
         ) / 100
         
         anomalies = analyzer.detect_anomalies(contamination)
@@ -485,12 +487,74 @@ def sales_analysis_page(data):
         
         # Show anomalous days
         if len(anomaly_days) > 0:
-            st.subheader("Detected Anomalies")
+            st.subheader("Detected Anomalies with Explanations")
+            
+            # Add summary of normal baseline
+            if len(normal_days) > 0:
+                st.info(f"📊 **Normal Day Baseline:** "
+                       f"Revenue: ${normal_days['total'].mean():,.0f} | "
+                       f"Orders: {normal_days['num_orders'].mean():.0f} | "
+                       f"Quantity: {normal_days['quantity'].mean():,.0f}")
+            
+            # Prepare display dataframe with reasons
+            anomaly_display = anomaly_days[[
+                'date', 'total', 'num_orders', 'quantity',
+                'revenue_diff_pct', 'orders_diff_pct', 'quantity_diff_pct',
+                'anomaly_reason', 'anomaly_score'
+            ]].sort_values('date', ascending=False).copy()
+            
+            # Rename columns for better display
+            anomaly_display.columns = [
+                'Date', 'Revenue ($)', 'Orders', 'Quantity',
+                'Revenue Δ%', 'Orders Δ%', 'Quantity Δ%',
+                'Why Anomalous?', 'Anomaly Score'
+            ]
+            
+            # Format the dataframe
             st.dataframe(
-                format_datetime_columns(anomaly_days[['date', 'total', 'num_orders', 'revenue_zscore']].sort_values('date', ascending=False)),
+                format_datetime_columns(anomaly_display),
                 use_container_width=True,
                 hide_index=True
             )
+            
+            # Add detailed view with expandable sections
+            st.markdown("### 🔍 Detailed Anomaly Breakdown")
+            for idx, row in anomaly_days.sort_values('date', ascending=False).iterrows():
+                with st.expander(f"📅 {row['date'].strftime('%Y-%m-%d (%A)')} - {row['anomaly_reason']}"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Revenue", 
+                                 f"${row['total']:,.2f}",
+                                 delta=f"{row['revenue_diff_pct']:+.1f}%",
+                                 delta_color="off")
+                        st.caption(f"Normal avg: ${row['avg_revenue']:,.0f}")
+                    
+                    with col2:
+                        st.metric("Orders", 
+                                 f"{int(row['num_orders'])}",
+                                 delta=f"{row['orders_diff_pct']:+.1f}%",
+                                 delta_color="off")
+                        st.caption(f"Normal avg: {row['avg_orders']:.0f}")
+                    
+                    with col3:
+                        st.metric("Quantity Sold", 
+                                 f"{int(row['quantity'])}",
+                                 delta=f"{row['quantity_diff_pct']:+.1f}%",
+                                 delta_color="off")
+                        st.caption(f"Normal avg: {row['avg_quantity']:.0f}")
+                    
+                    # Show z-scores
+                    st.markdown("**Statistical Scores:**")
+                    st.write(f"- Revenue Z-Score: {row['revenue_zscore']:.2f} "
+                            f"({'⚠️ Significant' if abs(row['revenue_zscore']) > 2 else '✓ Normal'})")
+                    st.write(f"- Orders Z-Score: {row['orders_zscore']:.2f} "
+                            f"({'⚠️ Significant' if abs(row['orders_zscore']) > 2 else '✓ Normal'})")
+                    st.write(f"- Quantity Z-Score: {row['quantity_zscore']:.2f} "
+                            f"({'⚠️ Significant' if abs(row['quantity_zscore']) > 2 else '✓ Normal'})")
+                    st.write(f"- Anomaly Score: {row['anomaly_score']:.3f} (more negative = more anomalous)")
+        else:
+            st.info("No anomalies detected with current sensitivity setting. Try increasing sensitivity to detect more outliers.")
     
     with tab5:
         st.subheader(t('refund_analysis'))
@@ -689,7 +753,8 @@ def sales_analysis_page(data):
                         all_products = [t('all_products')] + sorted(refund_data['item_name'].unique().tolist())
                         selected_product = st.selectbox(
                             t('filter_by_product'),
-                            all_products
+                            all_products,
+                            key='refund_details_product_filter'
                         )
                     
                     # Apply filters
@@ -847,7 +912,8 @@ def monthly_analysis_page(data):
                 "Select Month for Detailed Category Breakdown",
                 options=available_months,
                 index=len(available_months) - 1,  # Default to latest month
-                format_func=lambda x: pd.to_datetime(x).strftime('%B %Y')
+                format_func=lambda x: pd.to_datetime(x).strftime('%B %Y'),
+                key='monthly_category_selector'
             )
             
             # Filter for selected month
@@ -1012,10 +1078,13 @@ def monthly_analysis_page(data):
                         st.caption(f"{month1_name}: {m1['customers']:,}")
                     
                     with col4:
+                        aov_delta = m2['avg_order_value'] - m1['avg_order_value']
+                        # Format delta with sign before dollar sign for proper color detection
+                        delta_formatted = f"-${abs(aov_delta):.2f}" if aov_delta < 0 else f"+${aov_delta:.2f}"
                         st.metric(
                             "Avg Order Value",
                             f"${m2['avg_order_value']:,.2f}",
-                            f"${m2['avg_order_value'] - m1['avg_order_value']:+,.2f}",
+                            delta=delta_formatted,
                             delta_color="normal"
                         )
                         st.caption(f"{month1_name}: ${m1['avg_order_value']:,.2f}")
@@ -1308,7 +1377,7 @@ def customer_analysis_page(data):
     with tab2:
         st.subheader("Churn Risk Analysis")
         
-        threshold = st.slider("Inactivity threshold (days)", 30, 180, 90)
+        threshold = st.slider("Inactivity threshold (days)", 30, 180, 90, key='customer_churn_threshold')
         churn_risk = analyzer.get_churn_risk_customers(threshold)
         
         if len(churn_risk) > 0:
@@ -1376,7 +1445,7 @@ def customer_analysis_page(data):
     with tab4:
         st.subheader("New Customers")
         
-        days_back = st.slider("Recent period (days)", 7, 90, 30)
+        days_back = st.slider("Recent period (days)", 7, 90, 30, key='customer_new_days_back')
         new_customers = analyzer.get_new_customers(days_back)
         
         if len(new_customers) > 0:
@@ -1617,7 +1686,8 @@ def product_analysis_page(data):
         class_filter = st.multiselect(
             "Filter by class",
             ['A', 'B', 'C'],
-            default=['A']
+            default=['A'],
+            key='product_abc_class_filter'
         )
         filtered_abc = abc_data[abc_data['abc_class'].isin(class_filter)].copy()
         
@@ -1821,7 +1891,8 @@ def inventory_management_page(data):
         with col1:
             signal_filter = st.selectbox(
                 t('filter_by_signal'),
-                ['All', 'OUT_OF_STOCK', 'URGENT_REORDER', 'REORDER_SOON', 'MONITOR', 'OK']
+                ['All', 'OUT_OF_STOCK', 'URGENT_REORDER', 'REORDER_SOON', 'MONITOR', 'OK'],
+                key='inventory_signal_filter'
             )
         
         if signal_filter != 'All':
@@ -2186,7 +2257,8 @@ def rfm_analysis_page(data):
         
         selected_segment = st.selectbox(
             "Select segment to explore",
-            segment_summary['segment'].tolist()
+            segment_summary['segment'].tolist(),
+            key='rfm_segment_selector'
         )
         
         segment_customers = analyzer.get_customers_by_segment(selected_segment)
@@ -2442,7 +2514,7 @@ def refill_prediction_page(data):
     with tab1:
         st.subheader("📅 Upcoming Refills & Revenue Forecast")
         
-        days_ahead = st.slider("Look ahead (days)", 7, 60, 30)
+        days_ahead = st.slider("Look ahead (days)", 7, 60, 30, key='refill_days_ahead')
         upcoming = predictor.get_upcoming_refills(days_ahead)
         
         if len(upcoming) > 0:
@@ -2498,10 +2570,12 @@ def refill_prediction_page(data):
         col1, col2 = st.columns(2)
         with col1:
             tolerance = st.slider("Grace period (days)", 0, 14, 7, 
-                                 help="Days of tolerance before considering overdue")
+                                 help="Days of tolerance before considering overdue",
+                                 key='refill_grace_period')
         with col2:
             max_overdue_days = st.slider("Show overdue up to (days)", 30, 365, 90, step=30,
-                                        help="Maximum days since last purchase to show")
+                                        help="Maximum days since last purchase to show",
+                                        key='refill_max_overdue')
         
         overdue = predictor.get_overdue_refills(tolerance)
         
@@ -2624,7 +2698,7 @@ def refill_prediction_page(data):
         
         # Customer selection
         customers = data['customer_name'].unique()
-        selected_customer = st.selectbox("Select customer", sorted([str(c) for c in customers]))
+        selected_customer = st.selectbox("Select customer", sorted([str(c) for c in customers]), key='refill_customer_selector')
         
         schedule = predictor.get_customer_refill_schedule(selected_customer)
         
@@ -2750,10 +2824,12 @@ def cross_sell_page(data):
         with st.expander("⚡ Performance Settings", expanded=False):
             st.info(f"📊 Dataset has {len(data):,} records. For optimal performance, sampling is recommended.")
             enable_sampling = st.checkbox("Enable sampling for faster analysis", value=True, 
-                                         help="Sample most recent records for better performance")
+                                         help="Sample most recent records for better performance",
+                                         key='crosssell_enable_sampling')
             if enable_sampling:
                 max_records = st.slider("Max records to analyze", 10000, 200000, 100000, 10000,
-                                       help="More records = more accurate but slower")
+                                       help="More records = more accurate but slower",
+                                       key='crosssell_max_records')
     
     analyzer = get_cross_sell_analyzer(data, _enable_sampling=enable_sampling, _max_records=max_records)
     
@@ -2788,11 +2864,11 @@ def cross_sell_page(data):
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            min_items = st.number_input("Min items in bundle", 2, 5, 2)
+            min_items = st.number_input("Min items in bundle", 2, 5, 2, key='crosssell_min_items')
         with col2:
-            max_items = st.number_input("Max items in bundle", 2, 10, 4)
+            max_items = st.number_input("Max items in bundle", 2, 10, 4, key='crosssell_max_items')
         with col3:
-            n_bundles = st.number_input("Number of bundles", 5, 20, 10)
+            n_bundles = st.number_input("Number of bundles", 5, 20, 10, key='crosssell_n_bundles')
         
         with st.spinner("Analyzing product bundles..."):
             bundles = analyzer.get_bundle_suggestions(min_items, max_items, n_bundles, auto_adjust=True)
@@ -2862,9 +2938,9 @@ def cross_sell_page(data):
             # Filter controls
             col1, col2 = st.columns(2)
             with col1:
-                min_lift_filter = st.slider("Minimum Lift", 1.0, 5.0, 1.0, 0.1)
+                min_lift_filter = st.slider("Minimum Lift", 1.0, 5.0, 1.0, 0.1, key='crosssell_min_lift')
             with col2:
-                n_show = st.slider("Number of associations to show", 10, 50, 20)
+                n_show = st.slider("Number of associations to show", 10, 50, 20, key='crosssell_n_show')
             
             # Apply filters
             affinity_filtered = affinity[affinity['lift'] >= min_lift_filter].head(n_show)
@@ -2963,7 +3039,7 @@ def cross_sell_page(data):
         with col1:
             selected_product = st.selectbox("Select a product", products, key="rec_product")
         with col2:
-            n_recs = st.slider("Number of recommendations", 3, 15, 5)
+            n_recs = st.slider("Number of recommendations", 3, 15, 5, key='crosssell_n_recs')
         
         if st.button("Get Recommendations", type="primary"):
             with st.spinner(f"Finding complementary products for '{selected_product}'..."):
@@ -3105,13 +3181,14 @@ def ai_query_page(data):
     
     selected_example = st.selectbox(
         "Choose an example or write your own:",
-        example_questions
+        example_questions,
+        key='ai_query_example_selector'
     )
     
     if selected_example == "Custom question...":
-        user_query = st.text_input("Your question:", placeholder="e.g., What are the top 5 products by revenue?")
+        user_query = st.text_input("Your question:", placeholder="e.g., What are the top 5 products by revenue?", key='ai_query_custom')
     else:
-        user_query = st.text_input("Your question:", value=selected_example)
+        user_query = st.text_input("Your question:", value=selected_example, key='ai_query_selected')
     
     if st.button("🔍 Ask", type="primary"):
         if user_query and user_query != "Custom question...":
@@ -3261,7 +3338,8 @@ def export_page(data):
             t('rfm_segmentation_report'),
             t('refill_predictions_report'),
             t('cross_sell_opportunities')
-        ]
+        ],
+        key='export_report_type'
     )
     
     if st.button(t('generate_report')):
