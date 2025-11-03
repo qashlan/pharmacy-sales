@@ -381,6 +381,7 @@ def sales_analysis_page(data):
             'units': 'Units',
             'pieces': 'Pieces',
             'quantity': 'Quantity ⭐',
+            'price_per_unit': 'Price Per Unit',
             'revenue': 'Revenue',
             'orders': 'Orders'
         }
@@ -760,6 +761,351 @@ def sales_analysis_page(data):
                     )
                 else:
                     st.info(t('no_refund_transactions'))
+
+
+def monthly_analysis_page(data):
+    """Monthly sales and category analysis with comparison."""
+    st.header("📅 Monthly Sales & Category Analysis")
+    
+    analyzer = get_sales_analyzer(data)
+    
+    # Get available months
+    available_months = analyzer.get_available_months()
+    
+    if len(available_months) == 0:
+        st.warning("No data available for monthly analysis")
+        return
+    
+    # Create tabs for different views
+    tab1, tab2, tab3 = st.tabs([
+        "📊 Monthly Overview",
+        "📂 Category Breakdown",
+        "🔄 Month Comparison"
+    ])
+    
+    with tab1:
+        st.subheader("Monthly Sales Overview")
+        
+        # Get monthly trends
+        monthly_trends = analyzer.get_monthly_trends()
+        
+        if len(monthly_trends) > 0:
+            # Revenue trend chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=monthly_trends['month_start'],
+                y=monthly_trends['revenue'],
+                name='Revenue',
+                marker=dict(color='#1f77b4'),
+                text=monthly_trends['revenue'].apply(lambda x: f'${x:,.0f}'),
+                textposition='auto'
+            ))
+            
+            fig.update_layout(
+                title='Monthly Revenue Trend',
+                xaxis_title='Month',
+                yaxis_title='Revenue ($)',
+                hovermode='x unified',
+                height=500
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Show data table
+            display_monthly = monthly_trends[[
+                'year_month', 'revenue', 'orders', 'customers', 'items_sold', 'mom_growth'
+            ]].copy()
+            
+            display_monthly.columns = [
+                'Month', 'Revenue', 'Orders', 'Customers', 'Items Sold', 'MoM Growth %'
+            ]
+            
+            st.dataframe(
+                display_monthly.style.format({
+                    'Revenue': '${:,.2f}',
+                    'Orders': '{:,.0f}',
+                    'Customers': '{:,.0f}',
+                    'Items Sold': '{:,.0f}',
+                    'MoM Growth %': '{:+.2f}%'
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No monthly trend data available")
+    
+    with tab2:
+        st.subheader("Category Spending by Month")
+        
+        # Get monthly category breakdown
+        monthly_category = analyzer.get_monthly_category_breakdown()
+        
+        if len(monthly_category) > 0:
+            # Month selector for detailed view
+            selected_month = st.selectbox(
+                "Select Month for Detailed Category Breakdown",
+                options=available_months,
+                index=len(available_months) - 1,  # Default to latest month
+                format_func=lambda x: pd.to_datetime(x).strftime('%B %Y')
+            )
+            
+            # Filter for selected month
+            month_data = monthly_category[monthly_category['year_month'] == selected_month]
+            
+            if len(month_data) > 0:
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    # Pie chart of category spending
+                    fig_pie = px.pie(
+                        month_data,
+                        values='revenue',
+                        names='category',
+                        title=f'Category Distribution - {pd.to_datetime(selected_month).strftime("%B %Y")}',
+                        hole=0.4
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                
+                with col2:
+                    # Category summary metrics
+                    st.metric("Total Revenue", f"${month_data['revenue'].sum():,.2f}")
+                    st.metric("Total Categories", len(month_data))
+                    st.metric("Total Orders", f"{month_data['orders'].sum():,.0f}")
+                
+                # Detailed category table
+                st.markdown("#### Category Details")
+                display_categories = month_data[['category', 'revenue', 'quantity', 'orders', 'avg_order_value']].copy()
+                display_categories['revenue_pct'] = (display_categories['revenue'] / display_categories['revenue'].sum() * 100).round(2)
+                
+                display_categories.columns = ['Category', 'Revenue', 'Quantity', 'Orders', 'Avg Order Value', 'Revenue %']
+                
+                st.dataframe(
+                    display_categories.style.format({
+                        'Revenue': '${:,.2f}',
+                        'Quantity': '{:,.0f}',
+                        'Orders': '{:,.0f}',
+                        'Avg Order Value': '${:,.2f}',
+                        'Revenue %': '{:.2f}%'
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            
+            # Stacked bar chart for all months
+            st.markdown("#### Category Spending Trend Across All Months")
+            
+            # Create pivot table for stacked bar chart
+            pivot_data = monthly_category.pivot_table(
+                index='year_month',
+                columns='category',
+                values='revenue',
+                aggfunc='sum',
+                fill_value=0
+            )
+            
+            fig_stacked = go.Figure()
+            
+            for category in pivot_data.columns:
+                fig_stacked.add_trace(go.Bar(
+                    x=[pd.to_datetime(m).strftime('%b %Y') for m in pivot_data.index],
+                    y=pivot_data[category],
+                    name=category,
+                    text=pivot_data[category].apply(lambda x: f'${x:,.0f}' if x > 0 else ''),
+                    textposition='inside'
+                ))
+            
+            fig_stacked.update_layout(
+                title='Monthly Category Spending Trend',
+                xaxis_title='Month',
+                yaxis_title='Revenue ($)',
+                barmode='stack',
+                height=500,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_stacked, use_container_width=True)
+            
+            # Download option
+            csv_data = monthly_category.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Monthly Category Data (CSV)",
+                data=csv_data,
+                file_name=f"monthly_category_breakdown_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("No category breakdown data available")
+    
+    with tab3:
+        st.subheader("Compare Two Months")
+        
+        if len(available_months) < 2:
+            st.warning("Need at least 2 months of data for comparison")
+        else:
+            # Month selectors
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                month1 = st.selectbox(
+                    "First Month",
+                    options=available_months,
+                    index=max(0, len(available_months) - 2),
+                    format_func=lambda x: pd.to_datetime(x).strftime('%B %Y'),
+                    key='month1'
+                )
+            
+            with col2:
+                month2 = st.selectbox(
+                    "Second Month",
+                    options=available_months,
+                    index=len(available_months) - 1,
+                    format_func=lambda x: pd.to_datetime(x).strftime('%B %Y'),
+                    key='month2'
+                )
+            
+            if month1 and month2:
+                # Get comparison data
+                comparison = analyzer.get_month_comparison(month1, month2)
+                
+                if 'error' in comparison:
+                    st.error(comparison['error'])
+                else:
+                    month1_name = pd.to_datetime(month1).strftime('%B %Y')
+                    month2_name = pd.to_datetime(month2).strftime('%B %Y')
+                    
+                    # Overall metrics comparison
+                    st.markdown(f"### Overall Comparison: {month1_name} vs {month2_name}")
+                    
+                    m1 = comparison['month1_metrics']
+                    m2 = comparison['month2_metrics']
+                    changes = comparison['changes']
+                    
+                    # Display metrics in columns
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric(
+                            "Revenue",
+                            f"${m2['revenue']:,.2f}",
+                            f"{changes['revenue_change_pct']:+.1f}%",
+                            delta_color="normal"
+                        )
+                        st.caption(f"{month1_name}: ${m1['revenue']:,.2f}")
+                    
+                    with col2:
+                        st.metric(
+                            "Orders",
+                            f"{m2['orders']:,}",
+                            f"{changes['orders_change_pct']:+.1f}%",
+                            delta_color="normal"
+                        )
+                        st.caption(f"{month1_name}: {m1['orders']:,}")
+                    
+                    with col3:
+                        st.metric(
+                            "Customers",
+                            f"{m2['customers']:,}",
+                            f"{changes['customers_change_pct']:+.1f}%",
+                            delta_color="normal"
+                        )
+                        st.caption(f"{month1_name}: {m1['customers']:,}")
+                    
+                    with col4:
+                        st.metric(
+                            "Avg Order Value",
+                            f"${m2['avg_order_value']:,.2f}",
+                            f"${m2['avg_order_value'] - m1['avg_order_value']:+,.2f}",
+                            delta_color="normal"
+                        )
+                        st.caption(f"{month1_name}: ${m1['avg_order_value']:,.2f}")
+                    
+                    # Category comparison
+                    st.markdown("### Category Comparison")
+                    
+                    category_comp = comparison['category_comparison']
+                    
+                    if len(category_comp) > 0:
+                        # Side-by-side bar chart
+                        fig_compare = go.Figure()
+                        
+                        fig_compare.add_trace(go.Bar(
+                            x=category_comp['category'],
+                            y=category_comp['revenue_m1'],
+                            name=month1_name,
+                            marker=dict(color='#1f77b4'),
+                            text=category_comp['revenue_m1'].apply(lambda x: f'${x:,.0f}'),
+                            textposition='auto'
+                        ))
+                        
+                        fig_compare.add_trace(go.Bar(
+                            x=category_comp['category'],
+                            y=category_comp['revenue_m2'],
+                            name=month2_name,
+                            marker=dict(color='#ff7f0e'),
+                            text=category_comp['revenue_m2'].apply(lambda x: f'${x:,.0f}'),
+                            textposition='auto'
+                        ))
+                        
+                        fig_compare.update_layout(
+                            title='Category Revenue Comparison',
+                            xaxis_title='Category',
+                            yaxis_title='Revenue ($)',
+                            barmode='group',
+                            height=500,
+                            hovermode='x unified'
+                        )
+                        
+                        st.plotly_chart(fig_compare, use_container_width=True)
+                        
+                        # Detailed comparison table
+                        st.markdown("#### Detailed Category Comparison")
+                        display_comp = category_comp[[
+                            'category', 'revenue_m1', 'revenue_m2', 'revenue_change', 'revenue_change_pct',
+                            'quantity_m1', 'quantity_m2', 'orders_m1', 'orders_m2'
+                        ]].copy()
+                        
+                        display_comp.columns = [
+                            'Category',
+                            f'{month1_name} Revenue',
+                            f'{month2_name} Revenue',
+                            'Revenue Change',
+                            'Change %',
+                            f'{month1_name} Qty',
+                            f'{month2_name} Qty',
+                            f'{month1_name} Orders',
+                            f'{month2_name} Orders'
+                        ]
+                        
+                        st.dataframe(
+                            display_comp.style.format({
+                                f'{month1_name} Revenue': '${:,.2f}',
+                                f'{month2_name} Revenue': '${:,.2f}',
+                                'Revenue Change': '${:,.2f}',
+                                'Change %': '{:+.2f}%',
+                                f'{month1_name} Qty': '{:,.0f}',
+                                f'{month2_name} Qty': '{:,.0f}',
+                                f'{month1_name} Orders': '{:,.0f}',
+                                f'{month2_name} Orders': '{:,.0f}'
+                            }).applymap(
+                                lambda x: 'color: green' if isinstance(x, str) and '+' in str(x) and '%' in str(x) else 
+                                         ('color: red' if isinstance(x, str) and '-' in str(x) and '%' in str(x) else ''),
+                                subset=['Change %']
+                            ),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Download comparison
+                        csv_comparison = category_comp.to_csv(index=False)
+                        st.download_button(
+                            label=f"📥 Download Comparison ({month1_name} vs {month2_name})",
+                            data=csv_comparison,
+                            file_name=f"month_comparison_{month1}_{month2}_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.info("No category data available for comparison")
 
 
 def customer_analysis_page(data):
@@ -1798,112 +2144,267 @@ def rfm_analysis_page(data):
     analyzer = get_rfm_analyzer(data)
     rfm_data = analyzer.segment_customers()
     
-    # Segment summary
-    st.subheader("Segment Overview")
-    segment_summary = analyzer.get_segment_summary()
+    # Create tabs for different views
+    tab1, tab2, tab3 = st.tabs([
+        "📊 Overall Segmentation",
+        "📂 RFM by Category",
+        "📖 Understanding RFM"
+    ])
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        fig = px.pie(
-            segment_summary,
-            values='customer_count',
-            names='segment',
-            title='Customer Distribution by Segment'
+    with tab1:
+        # Segment summary
+        st.subheader("Segment Overview")
+        segment_summary = analyzer.get_segment_summary()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig = px.pie(
+                segment_summary,
+                values='customer_count',
+                names='segment',
+                title='Customer Distribution by Segment'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            fig = px.bar(
+                segment_summary,
+                x='segment',
+                y='total_revenue',
+                title='Revenue by Segment',
+                color='total_revenue',
+                color_continuous_scale='Blues'
+            )
+            fig.update_xaxes(tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(format_datetime_columns(segment_summary), use_container_width=True, hide_index=True)
+        
+        # Segment details
+        st.subheader("Segment Details")
+        
+        selected_segment = st.selectbox(
+            "Select segment to explore",
+            segment_summary['segment'].tolist()
+        )
+        
+        segment_customers = analyzer.get_customers_by_segment(selected_segment)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.write(f"**{selected_segment}** - {len(segment_customers)} customers")
+            st.dataframe(format_datetime_columns(segment_customers.head(20)), use_container_width=True, hide_index=True)
+        
+        with col2:
+            st.write("**Recommended Actions**")
+            recommendations = analyzer.recommend_actions(selected_segment)
+            st.info(f"**Priority:** {recommendations.get('priority', 'N/A')}")
+            st.write(f"**Goal:** {recommendations.get('goal', 'N/A')}")
+            st.write("**Actions:**")
+            for action in recommendations.get('actions', []):
+                st.write(f"- {action}")
+        
+        # RFM visualization
+        st.subheader("RFM Distribution")
+        
+        fig = px.scatter_3d(
+            rfm_data,
+            x='recency',
+            y='frequency',
+            z='monetary',
+            color='segment',
+            hover_name='customer_name',
+            title='3D RFM Scatter Plot',
+            labels={
+                'recency': 'Recency (days)',
+                'frequency': 'Frequency (orders)',
+                'monetary': 'Monetary ($)'
+            }
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    with col2:
-        fig = px.bar(
-            segment_summary,
-            x='segment',
-            y='total_revenue',
-            title='Revenue by Segment',
-            color='total_revenue',
-            color_continuous_scale='Blues'
+    with tab2:
+        st.subheader("📂 RFM Segmentation by Product Category")
+        st.markdown("""
+        This view shows how customers behave within each product category. 
+        A customer might be a **Champion** in one category but **At Risk** in another!
+        """)
+        
+        # Get RFM by category data
+        rfm_by_category = analyzer.calculate_rfm_by_category()
+        category_segment_summary = analyzer.get_category_segment_summary()
+        
+        # Get list of categories
+        categories = sorted(rfm_by_category['category'].unique())
+        
+        # Category selector
+        selected_category = st.selectbox(
+            "Select Product Category",
+            categories,
+            key='rfm_category_select'
         )
-        fig.update_xaxes(tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    st.dataframe(format_datetime_columns(segment_summary), use_container_width=True, hide_index=True)
-    
-    # Segment details
-    st.subheader("Segment Details")
-    
-    selected_segment = st.selectbox(
-        "Select segment to explore",
-        segment_summary['segment'].tolist()
-    )
-    
-    segment_customers = analyzer.get_customers_by_segment(selected_segment)
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.write(f"**{selected_segment}** - {len(segment_customers)} customers")
-        st.dataframe(format_datetime_columns(segment_customers.head(20)), use_container_width=True, hide_index=True)
-    
-    with col2:
-        st.write("**Recommended Actions**")
-        recommendations = analyzer.recommend_actions(selected_segment)
-        st.info(f"**Priority:** {recommendations.get('priority', 'N/A')}")
-        st.write(f"**Goal:** {recommendations.get('goal', 'N/A')}")
-        st.write("**Actions:**")
-        for action in recommendations.get('actions', []):
-            st.write(f"- {action}")
-    
-    # RFM visualization
-    st.subheader("RFM Distribution")
-    
-    fig = px.scatter_3d(
-        rfm_data,
-        x='recency',
-        y='frequency',
-        z='monetary',
-        color='segment',
-        hover_name='customer_name',
-        title='3D RFM Scatter Plot',
-        labels={
-            'recency': 'Recency (days)',
-            'frequency': 'Frequency (orders)',
-            'monetary': 'Monetary ($)'
-        }
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Column explanations
-    st.markdown("---")
-    st.subheader("📖 Understanding the Metrics")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **RFM Columns Explained:**
         
-        - **Customer Name**: Unique customer identifier
-        - **Recency**: Days since last purchase (lower is better)
-        - **Frequency**: Total number of purchases/orders
-        - **Monetary**: Total amount spent by customer
-        - **R Score**: Recency score (1-5, higher = more recent)
-        - **F Score**: Frequency score (1-5, higher = more purchases)
-        - **M Score**: Monetary score (1-5, higher = more spending)
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Segment Definitions:**
+        # Filter data for selected category
+        category_data = rfm_by_category[rfm_by_category['category'] == selected_category]
+        category_summary = category_segment_summary[category_segment_summary['category'] == selected_category]
         
-        - **🆕 New Customers**: 1 purchase, active within 30 days
-        - **🌱 Potential**: 2-5 purchases, showing interest
-        - **🏆 Champions**: 6+ purchases, active (0-30 days)
-        - **💎 Loyal**: 6+ purchases, engaged (30-60 days)
-        - **⚠️ At Risk**: 6+ purchases, inactive (60-90 days)
-        - **😴 Lost**: Inactive for 90+ days
-        - **🔄 Need Attention**: Customers needing re-engagement
-        """)
+        # Display metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Customers", f"{len(category_data):,}")
+        with col2:
+            st.metric("Total Revenue", f"${category_data['monetary'].sum():,.2f}")
+        with col3:
+            st.metric("Avg Customer Value", f"${category_data['monetary'].mean():,.2f}")
+        
+        # Visualizations
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Segment distribution pie chart
+            fig_pie = px.pie(
+                category_summary,
+                values='customer_count',
+                names='segment',
+                title=f'Customer Segments in {selected_category}',
+                hole=0.4
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        
+        with col2:
+            # Revenue by segment bar chart
+            fig_bar = px.bar(
+                category_summary,
+                x='segment',
+                y='total_revenue',
+                title=f'Revenue by Segment - {selected_category}',
+                color='total_revenue',
+                color_continuous_scale='Viridis'
+            )
+            fig_bar.update_xaxes(tickangle=-45)
+            st.plotly_chart(fig_bar, use_container_width=True)
+        
+        # Summary table
+        st.markdown(f"#### Segment Summary for {selected_category}")
+        display_summary = category_summary[[
+            'segment', 'customer_count', 'total_revenue', 'pct_of_category', 
+            'avg_recency', 'avg_frequency'
+        ]].copy()
+        
+        display_summary.columns = [
+            'Segment', 'Customers', 'Revenue', '% of Category', 
+            'Avg Days Since Purchase', 'Avg Purchases'
+        ]
+        
+        st.dataframe(
+            display_summary.style.format({
+                'Customers': '{:,.0f}',
+                'Revenue': '${:,.2f}',
+                '% of Category': '{:.1f}%',
+                'Avg Days Since Purchase': '{:.0f}',
+                'Avg Purchases': '{:.1f}'
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Customer details by segment
+        st.markdown("#### Customer Details")
+        
+        # Get segments available in this category
+        available_segments = category_summary['segment'].tolist()
+        
+        selected_segment_cat = st.selectbox(
+            "Filter by Segment (optional)",
+            ['All Segments'] + available_segments,
+            key='rfm_segment_filter'
+        )
+        
+        # Filter customers
+        if selected_segment_cat == 'All Segments':
+            customers_display = category_data
+        else:
+            customers_display = category_data[category_data['segment'] == selected_segment_cat]
+        
+        # Display ALL filtered customers (not just top 50)
+        st.write(f"Showing all {len(customers_display)} customers")
+        
+        display_customers = customers_display[['customer_name', 'segment', 'recency', 'frequency', 'monetary']].copy()
+        display_customers.columns = ['Customer', 'Segment', 'Days Since Purchase', 'Purchases', 'Total Spent']
+        
+        st.dataframe(
+            display_customers.style.format({
+                'Days Since Purchase': '{:.0f}',
+                'Purchases': '{:.0f}',
+                'Total Spent': '${:,.2f}'
+            }),
+            use_container_width=True,
+            hide_index=True,
+            height=600  # Set a fixed height with scrolling
+        )
+        
+        # Download option for filtered data
+        csv_filtered = customers_display.to_csv(index=False)
+        st.download_button(
+            label=f"📥 Download Filtered Customer Data (CSV)",
+            data=csv_filtered,
+            file_name=f"rfm_{selected_category}_{selected_segment_cat}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
     
-    st.info("💡 **Tip**: Focus on 'At Risk' customers with win-back campaigns before they become 'Lost'. Nurture 'Potential' customers to become 'Champions'!")
+    with tab3:
+        # Column explanations
+        st.subheader("📖 Understanding the Metrics")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **RFM Columns Explained:**
+            
+            - **Customer Name**: Unique customer identifier
+            - **Recency**: Days since last purchase (lower is better)
+            - **Frequency**: Total number of purchases/orders
+            - **Monetary**: Total amount spent by customer
+            - **R Score**: Recency score (1-5, higher = more recent)
+            - **F Score**: Frequency score (1-5, higher = more purchases)
+            - **M Score**: Monetary score (1-5, higher = more spending)
+            """)
+        
+        with col2:
+            st.markdown("""
+            **Segment Definitions:**
+            
+            - **🆕 New Customers**: 1 purchase, active within 30 days
+            - **🌱 Potential**: 2-5 purchases, showing interest
+            - **🏆 Champions**: 6+ purchases, active (0-30 days)
+            - **💎 Loyal**: 6+ purchases, engaged (30-60 days)
+            - **⚠️ At Risk**: 6+ purchases, inactive (60-90 days)
+            - **😴 Lost**: Inactive for 90+ days
+            - **🔄 Need Attention**: Customers needing re-engagement
+            """)
+        
+        st.info("💡 **Tip**: Focus on 'At Risk' customers with win-back campaigns before they become 'Lost'. Nurture 'Potential' customers to become 'Champions'!")
+        
+        st.markdown("---")
+        st.markdown("""
+        ### 📂 RFM by Category Explained
+        
+        **Category-specific RFM analysis** shows customer behavior within each product category:
+        
+        - A customer can be a **Champion** in cosmetics but **At Risk** in medications
+        - Different categories may have different customer lifecycles
+        - Helps target marketing campaigns by category interest
+        - Identify cross-selling opportunities (Champions in one category, new in another)
+        
+        **Use Cases:**
+        - Target promotions for specific categories to at-risk customers
+        - Identify category experts (Champions in specific categories)
+        - Find customers to introduce to new categories
+        - Understand category-specific customer journeys
+        """)
 
 
 def refill_prediction_page(data):
@@ -2860,6 +3361,7 @@ def main():
     # Menu items with emojis
     menu_items = [
         f"📊 {t('sales_analysis')}",
+        f"📅 Monthly Analysis",
         f"👥 {t('customer_insights')}",
         f"📦 {t('product_performance')}",
         f"📦 {t('inventory_management')}",
@@ -2888,6 +3390,7 @@ def main():
     # Extract the key part without emoji for mapping
     page_functions = [
         sales_analysis_page,
+        monthly_analysis_page,
         customer_analysis_page,
         product_analysis_page,
         inventory_management_page,

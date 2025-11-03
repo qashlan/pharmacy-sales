@@ -431,4 +431,150 @@ class RFMAnalyzer:
             'actions': ['Analyze customer behavior', 'Provide personalized service'],
             'goal': 'Understand and serve customer needs'
         })
+    
+    def calculate_rfm_by_category(self) -> pd.DataFrame:
+        """
+        Calculate RFM metrics for each customer within each category.
+        
+        This shows customer behavior specific to each product category,
+        revealing which customers are Champions/Loyal/At Risk in different categories.
+        
+        Returns:
+            DataFrame with columns:
+            - customer_name
+            - category
+            - recency (days since last purchase in this category)
+            - frequency (number of purchases in this category)
+            - monetary (total spent in this category)
+            - segment (RFM segment for this category)
+        """
+        # Use only sales data (exclude refunds)
+        sales_data = self.data[~self.data['is_refund']].copy()
+        
+        # Calculate RFM for each customer-category combination
+        rfm_by_category = sales_data.groupby(['customer_name', 'category']).agg({
+            'date': lambda x: (self.current_date - x.max()).days,  # Recency
+            'order_id': 'nunique',  # Frequency
+            'total': 'sum'  # Monetary
+        }).reset_index()
+        
+        rfm_by_category.columns = ['customer_name', 'category', 'recency', 'frequency', 'monetary']
+        
+        # Assign segments based on category-specific behavior
+        def assign_category_segment(row):
+            frequency = row['frequency']
+            recency = row['recency']
+            monetary = row['monetary']
+            
+            # Simplified segmentation for category-specific behavior
+            if frequency == 1:
+                if recency <= 30:
+                    return '🆕 New Customers'
+                elif recency <= 90:
+                    return '⚠️ New (At Risk)'
+                else:
+                    return '😢 Lost (New)'
+            elif 2 <= frequency <= 5:
+                if recency <= 30:
+                    return '🌱 Potential Customers'
+                elif recency <= 90:
+                    return '👀 Potential (Need Attention)'
+                else:
+                    return '💔 Churned (Potential)'
+            else:  # frequency >= 6
+                if recency <= 30:
+                    return '🏆 Champions'
+                elif recency <= 60:
+                    return '💎 Loyal Customers'
+                elif recency <= 90:
+                    return '⚠️ At Risk'
+                else:
+                    return '😞 Lost Customers'
+        
+        rfm_by_category['segment'] = rfm_by_category.apply(assign_category_segment, axis=1)
+        
+        # Sort by category and monetary value
+        rfm_by_category = rfm_by_category.sort_values(['category', 'monetary'], ascending=[True, False])
+        
+        return rfm_by_category
+    
+    def get_category_segment_summary(self) -> pd.DataFrame:
+        """
+        Get summary of customer segments by category.
+        
+        Returns:
+            DataFrame showing how many customers are in each segment for each category
+        """
+        rfm_by_category = self.calculate_rfm_by_category()
+        
+        # Count customers by category and segment
+        summary = rfm_by_category.groupby(['category', 'segment']).agg({
+            'customer_name': 'count',
+            'monetary': 'sum',
+            'recency': 'mean',
+            'frequency': 'mean'
+        }).reset_index()
+        
+        summary.columns = ['category', 'segment', 'customer_count', 'total_revenue', 
+                          'avg_recency', 'avg_frequency']
+        
+        # Calculate percentages within each category
+        category_totals = summary.groupby('category')['customer_count'].sum().reset_index()
+        category_totals.columns = ['category', 'category_total']
+        
+        summary = summary.merge(category_totals, on='category')
+        summary['pct_of_category'] = (summary['customer_count'] / summary['category_total'] * 100).round(2)
+        
+        # Sort by category and revenue
+        summary = summary.sort_values(['category', 'total_revenue'], ascending=[True, False])
+        
+        return summary
+    
+    def get_customers_by_category_segment(self, category: str, segment: str = None) -> pd.DataFrame:
+        """
+        Get customers in a specific category, optionally filtered by segment.
+        
+        Args:
+            category: Product category to filter by
+            segment: Optional RFM segment to filter by (e.g., 'Champions', 'At Risk')
+        
+        Returns:
+            DataFrame with customer details for the specified category/segment
+        """
+        rfm_by_category = self.calculate_rfm_by_category()
+        
+        # Filter by category
+        result = rfm_by_category[rfm_by_category['category'] == category].copy()
+        
+        # Filter by segment if specified
+        if segment:
+            # Remove emoji from segment for matching
+            segment_clean = segment.split(' ', 1)[-1] if ' ' in segment else segment
+            result = result[result['segment'].str.contains(segment_clean, case=False, na=False)]
+        
+        # Sort by monetary value
+        result = result.sort_values('monetary', ascending=False)
+        
+        return result[['customer_name', 'segment', 'recency', 'frequency', 'monetary']]
+    
+    def get_top_customers_per_category(self, n: int = 10) -> pd.DataFrame:
+        """
+        Get top N customers for each category by monetary value.
+        
+        Args:
+            n: Number of top customers to return per category
+        
+        Returns:
+            DataFrame with top customers for each category
+        """
+        rfm_by_category = self.calculate_rfm_by_category()
+        
+        # Get top N customers per category
+        top_customers = (rfm_by_category
+                        .groupby('category')
+                        .apply(lambda x: x.nlargest(n, 'monetary'))
+                        .reset_index(drop=True))
+        
+        return top_customers[['category', 'customer_name', 'segment', 'recency', 
+                             'frequency', 'monetary']]
 

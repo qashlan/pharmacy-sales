@@ -212,11 +212,15 @@ class SalesAnalyzer:
         - Units: Full units/boxes sold (integer)
         - Pieces: Loose pieces sold (integer)
         - Quantity: Total effective quantity sold (can be fractional) ⭐
+        - Price Per Unit: Average price per unit sold
         
         Args:
             n: Number of top products to return
             metric: 'revenue', 'quantity', or 'orders'
         """
+        # Filter out refunds for top products analysis
+        sales_data = self.data[~self.data['is_refund']].copy()
+        
         # Determine which columns are available
         agg_dict = {
             'total': 'sum',
@@ -225,49 +229,58 @@ class SalesAnalyzer:
         }
         
         # Add units and pieces if they exist
-        if 'units' in self.data.columns:
+        if 'units' in sales_data.columns:
             agg_dict['units'] = 'sum'
-        if 'pieces' in self.data.columns:
+        if 'pieces' in sales_data.columns:
             agg_dict['pieces'] = 'sum'
         
+        # Aggregate data
+        top = sales_data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
+        
+        # Rename columns using dictionary (safer than list assignment)
+        rename_dict = {
+            'total': 'revenue',
+            'order_id': 'orders'
+        }
+        top = top.rename(columns=rename_dict)
+        
+        # Calculate price per unit (revenue / quantity)
+        top['price_per_unit'] = top['revenue'] / top['quantity'].replace(0, np.nan)
+        top['price_per_unit'] = top['price_per_unit'].fillna(0).round(2)
+        
+        # Sort based on metric
         if metric == 'revenue':
-            top = self.data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
-            col_names = ['item_code', 'item_name', 'revenue', 'quantity', 'orders']
-            if 'units' in agg_dict:
-                col_names.insert(3, 'units')
-            if 'pieces' in agg_dict:
-                col_names.insert(4, 'pieces')
-            top.columns = col_names
             top = top.sort_values('revenue', ascending=False).head(n)
+            # Reorder columns for display
+            col_order = ['item_code', 'item_name', 'revenue']
+            if 'units' in top.columns:
+                col_order.append('units')
+            if 'pieces' in top.columns:
+                col_order.append('pieces')
+            col_order.extend(['quantity', 'price_per_unit', 'orders'])
+            top = top[[col for col in col_order if col in top.columns]]
             
         elif metric == 'quantity':
-            top = self.data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
-            col_names = ['item_code', 'item_name', 'quantity', 'revenue', 'orders']
-            if 'units' in agg_dict:
-                col_names.insert(2, 'units')
-            if 'pieces' in agg_dict:
-                col_names.insert(3, 'pieces')
-            top.columns = col_names
             top = top.sort_values('quantity', ascending=False).head(n)
+            # Reorder columns for display
+            col_order = ['item_code', 'item_name']
+            if 'units' in top.columns:
+                col_order.append('units')
+            if 'pieces' in top.columns:
+                col_order.append('pieces')
+            col_order.extend(['quantity', 'revenue', 'price_per_unit', 'orders'])
+            top = top[[col for col in col_order if col in top.columns]]
             
         elif metric == 'orders':
-            top = self.data.groupby(['item_code', 'item_name']).agg(agg_dict).reset_index()
-            col_names = ['item_code', 'item_name', 'orders', 'revenue', 'quantity']
-            if 'units' in agg_dict:
-                col_names.insert(3, 'units')
-            if 'pieces' in agg_dict:
-                col_names.insert(4, 'pieces')
-            # Reorder columns to match the agg_dict order
-            temp_names = ['item_code', 'item_name', 'revenue', 'quantity', 'orders']
-            if 'units' in agg_dict:
-                temp_names.insert(3, 'units')
-            if 'pieces' in agg_dict:
-                temp_names.insert(4, 'pieces')
-            top.columns = temp_names
-            # Reorder columns to final order
-            final_order = ['item_code', 'item_name', 'orders', 'units', 'pieces', 'quantity', 'revenue']
-            top = top[[col for col in final_order if col in top.columns]]
             top = top.sort_values('orders', ascending=False).head(n)
+            # Reorder columns for display
+            col_order = ['item_code', 'item_name', 'orders']
+            if 'units' in top.columns:
+                col_order.append('units')
+            if 'pieces' in top.columns:
+                col_order.append('pieces')
+            col_order.extend(['quantity', 'revenue', 'price_per_unit'])
+            top = top[[col for col in col_order if col in top.columns]]
         
         return top
     
@@ -694,4 +707,171 @@ class SalesAnalyzer:
             'refund_orders': refunds_df['order_id'].nunique(),
             'unique_customers_with_refunds': refunds_df['customer_name'].nunique()
         }
+    
+    def get_monthly_category_breakdown(self) -> pd.DataFrame:
+        """
+        Get monthly sales breakdown by category.
+        
+        Returns DataFrame with columns:
+        - year_month: Month in YYYY-MM format
+        - month_name: Human-readable month name
+        - category: Product category
+        - revenue: Total revenue for that category in that month
+        - quantity: Total quantity sold
+        - orders: Number of unique orders
+        - avg_order_value: Average order value
+        """
+        # Exclude refunds
+        df = self.data[~self.data['is_refund']].copy()
+        
+        # Add month columns
+        df['year_month'] = df['date'].dt.strftime('%Y-%m')
+        df['month_name'] = df['date'].dt.strftime('%B %Y')
+        df['month_start'] = df['date'].dt.to_period('M').dt.to_timestamp()
+        
+        # Group by month and category
+        monthly_category = df.groupby(['year_month', 'month_name', 'month_start', 'category']).agg({
+            'total': 'sum',
+            'quantity': 'sum',
+            'order_id': 'nunique'
+        }).reset_index()
+        
+        monthly_category.columns = ['year_month', 'month_name', 'month_start', 'category', 
+                                    'revenue', 'quantity', 'orders']
+        
+        # Calculate average order value
+        monthly_category['avg_order_value'] = (
+            monthly_category['revenue'] / monthly_category['orders']
+        ).round(2)
+        
+        # Sort by month and revenue
+        monthly_category = monthly_category.sort_values(['month_start', 'revenue'], ascending=[True, False])
+        
+        return monthly_category
+    
+    def get_month_comparison(self, month1: str, month2: str) -> Dict:
+        """
+        Compare two months side by side.
+        
+        Args:
+            month1: First month in YYYY-MM format (e.g., '2024-01')
+            month2: Second month in YYYY-MM format (e.g., '2024-02')
+            
+        Returns:
+            Dictionary with comparison metrics including:
+            - Overall metrics for each month
+            - Category breakdown for each month
+            - Growth rates and changes
+        """
+        # Exclude refunds
+        df = self.data[~self.data['is_refund']].copy()
+        df['year_month'] = df['date'].dt.strftime('%Y-%m')
+        
+        # Filter data for each month
+        month1_data = df[df['year_month'] == month1]
+        month2_data = df[df['year_month'] == month2]
+        
+        if len(month1_data) == 0 or len(month2_data) == 0:
+            return {
+                'error': f'No data found for one or both months',
+                'month1': month1,
+                'month2': month2,
+                'month1_records': len(month1_data),
+                'month2_records': len(month2_data)
+            }
+        
+        # Overall metrics for month 1
+        month1_metrics = {
+            'month': month1,
+            'revenue': month1_data['total'].sum(),
+            'quantity': month1_data['quantity'].sum(),
+            'orders': month1_data['order_id'].nunique(),
+            'customers': month1_data['customer_name'].nunique(),
+            'avg_order_value': month1_data.groupby('order_id')['total'].sum().mean()
+        }
+        
+        # Overall metrics for month 2
+        month2_metrics = {
+            'month': month2,
+            'revenue': month2_data['total'].sum(),
+            'quantity': month2_data['quantity'].sum(),
+            'orders': month2_data['order_id'].nunique(),
+            'customers': month2_data['customer_name'].nunique(),
+            'avg_order_value': month2_data.groupby('order_id')['total'].sum().mean()
+        }
+        
+        # Calculate changes
+        changes = {
+            'revenue_change': month2_metrics['revenue'] - month1_metrics['revenue'],
+            'revenue_change_pct': ((month2_metrics['revenue'] - month1_metrics['revenue']) / 
+                                  month1_metrics['revenue'] * 100) if month1_metrics['revenue'] > 0 else 0,
+            'quantity_change': month2_metrics['quantity'] - month1_metrics['quantity'],
+            'quantity_change_pct': ((month2_metrics['quantity'] - month1_metrics['quantity']) / 
+                                   month1_metrics['quantity'] * 100) if month1_metrics['quantity'] > 0 else 0,
+            'orders_change': month2_metrics['orders'] - month1_metrics['orders'],
+            'orders_change_pct': ((month2_metrics['orders'] - month1_metrics['orders']) / 
+                                 month1_metrics['orders'] * 100) if month1_metrics['orders'] > 0 else 0,
+            'customers_change': month2_metrics['customers'] - month1_metrics['customers'],
+            'customers_change_pct': ((month2_metrics['customers'] - month1_metrics['customers']) / 
+                                    month1_metrics['customers'] * 100) if month1_metrics['customers'] > 0 else 0
+        }
+        
+        # Category breakdown for month 1
+        month1_categories = month1_data.groupby('category').agg({
+            'total': 'sum',
+            'quantity': 'sum',
+            'order_id': 'nunique'
+        }).reset_index()
+        month1_categories.columns = ['category', 'revenue', 'quantity', 'orders']
+        month1_categories = month1_categories.sort_values('revenue', ascending=False)
+        
+        # Category breakdown for month 2
+        month2_categories = month2_data.groupby('category').agg({
+            'total': 'sum',
+            'quantity': 'sum',
+            'order_id': 'nunique'
+        }).reset_index()
+        month2_categories.columns = ['category', 'revenue', 'quantity', 'orders']
+        month2_categories = month2_categories.sort_values('revenue', ascending=False)
+        
+        # Category comparison
+        category_comparison = month1_categories.merge(
+            month2_categories, 
+            on='category', 
+            how='outer', 
+            suffixes=('_m1', '_m2')
+        ).fillna(0)
+        
+        # Calculate category changes
+        category_comparison['revenue_change'] = (
+            category_comparison['revenue_m2'] - category_comparison['revenue_m1']
+        )
+        category_comparison['revenue_change_pct'] = (
+            (category_comparison['revenue_change'] / category_comparison['revenue_m1'].replace(0, np.nan) * 100)
+            .fillna(0)
+            .round(2)
+        )
+        
+        category_comparison = category_comparison.sort_values('revenue_m2', ascending=False)
+        
+        return {
+            'month1_metrics': month1_metrics,
+            'month2_metrics': month2_metrics,
+            'changes': changes,
+            'month1_categories': month1_categories,
+            'month2_categories': month2_categories,
+            'category_comparison': category_comparison
+        }
+    
+    def get_available_months(self) -> List[str]:
+        """
+        Get list of available months in the data.
+        
+        Returns:
+            List of month strings in YYYY-MM format, sorted chronologically
+        """
+        df = self.data.copy()
+        df['year_month'] = df['date'].dt.strftime('%Y-%m')
+        months = sorted(df['year_month'].unique())
+        return months
 

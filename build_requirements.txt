@@ -1,0 +1,20 @@
+# Requirements for building the Windows executable
+# Install these on the Windows machine where you'll build the .exe
+
+pyinstaller>=5.13.0
+pyinstaller-hooks-contrib>=2023.6
+
+# Core dependencies (same as runtime)
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.14.0
+openpyxl>=3.1.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+mlxtend>=0.22.0
+python-dotenv>=1.0.0
+openai>=1.3.0
+
+
+
