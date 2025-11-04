@@ -1621,13 +1621,13 @@ def customer_analysis_page(data):
             st.write(f"**High-Value Customers (by Spend) - Top {n_high_value}**")
             high_value = analyzer.get_high_value_customers(n_high_value)
             high_value_display = translate_columns(high_value.copy())
-            st.dataframe(format_datetime_columns(high_value_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(high_value_display), use_container_width=True, hide_index=True)
         
         with col2:
             st.write(f"**Frequent Buyers - Top {n_frequent}**")
             frequent = analyzer.get_frequent_buyers(n_frequent)
             frequent_display = translate_columns(frequent.copy())
-            st.dataframe(format_datetime_columns(frequent_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(frequent_display), use_container_width=True, hide_index=True)
         
         # Add customer product history section
         st.markdown("---")
@@ -1788,7 +1788,7 @@ def customer_analysis_page(data):
             st.plotly_chart(fig, width='stretch')
             
             churn_risk_display = translate_columns(churn_risk.copy())
-            st.dataframe(format_datetime_columns(churn_risk_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(churn_risk_display), use_container_width=True, hide_index=True)
         else:
             st.success("No customers at risk of churning!")
     
@@ -1835,7 +1835,7 @@ def customer_analysis_page(data):
             )
             st.plotly_chart(fig_revenue, width='stretch')
         
-        st.dataframe(format_datetime_columns(segment_df_translated), width='stretch', hide_index=True)
+        st.dataframe(format_datetime_columns(segment_df_translated), use_container_width=True, hide_index=True)
     
     with tab4:
         st.subheader(t('new_customers'))
@@ -1860,7 +1860,7 @@ def customer_analysis_page(data):
             
             # Translate columns in dataframe
             new_customers_display = translate_columns(new_customers.copy())
-            st.dataframe(format_datetime_columns(new_customers_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(new_customers_display), use_container_width=True, hide_index=True)
         else:
             st.info(f"No new customers in the last {days_back} days")
 
@@ -1940,7 +1940,7 @@ def product_analysis_page(data):
                 
                 fast_movers_display = translate_columns(fast_movers_display)
                 
-                st.dataframe(format_datetime_columns(fast_movers_display), width='stretch', hide_index=True)
+                st.dataframe(format_datetime_columns(fast_movers_display), use_container_width=True, hide_index=True)
                 st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
                 
                 # Quick stats with refund info
@@ -1975,7 +1975,7 @@ def product_analysis_page(data):
                 
                 slow_movers_display = translate_columns(slow_movers_display)
                 
-                st.dataframe(format_datetime_columns(slow_movers_display), width='stretch', hide_index=True)
+                st.dataframe(format_datetime_columns(slow_movers_display), use_container_width=True, hide_index=True)
                 st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
                 
                 # Quick stats with refund info
@@ -2064,7 +2064,7 @@ def product_analysis_page(data):
         with col2:
             # Translate for display in table
             abc_summary_display = translate_columns(abc_summary)
-            st.dataframe(format_datetime_columns(abc_summary_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(abc_summary_display), use_container_width=True, hide_index=True)
         
         # Full table
         class_filter = st.multiselect(
@@ -2081,7 +2081,7 @@ def product_analysis_page(data):
         
         filtered_abc = translate_columns(filtered_abc)
         
-        st.dataframe(format_datetime_columns(filtered_abc), width='stretch', hide_index=True)
+        st.dataframe(format_datetime_columns(filtered_abc), use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity Sold = total units sold (ABC classification based on revenue)")
     
     with tab3:
@@ -2119,7 +2119,7 @@ def product_analysis_page(data):
         
         lifecycle_display = translate_columns(lifecycle_display)
         
-        st.dataframe(format_datetime_columns(lifecycle_display), width='stretch', hide_index=True)
+        st.dataframe(format_datetime_columns(lifecycle_display), use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity Sold = total units sold (lifecycle stage based on sales trends)")
 
 
@@ -2184,7 +2184,7 @@ def inventory_management_page(data):
                 'Quantity': [1.50, 0.50, 3.00],
                 'Category': ['Pain Relief', 'Antibiotics', 'Vitamins']
             })
-            st.dataframe(example_df, width='stretch')
+            st.dataframe(example_df, use_container_width=True)
             st.caption("Example: ITEM001 has 1 unit + 1 piece = Quantity 1.50 | ITEM002 has 0 units + 1 piece = Quantity 0.50")
         return
     
@@ -2250,7 +2250,7 @@ def inventory_management_page(data):
         if len(category_df) > 0:
             # Category table FIRST
             category_df_display = translate_columns(category_df.copy())
-            st.dataframe(category_df_display, width='stretch', hide_index=True)
+            st.dataframe(category_df_display, use_container_width=True, hide_index=True)
             
             st.markdown("---")
             
@@ -2430,7 +2430,7 @@ def inventory_management_page(data):
             if est_date_col in display_df.columns:
                 display_df[est_date_col] = pd.to_datetime(display_df[est_date_col]).dt.strftime('%Y-%m-%d')
             
-            st.dataframe(display_df, width='stretch', hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
             st.caption("⭐ Quantity is the total stock used for stockout prediction")
         else:
             st.success(f"✓ No items at risk of stockout in the next {config.STOCKOUT_FORECAST_DAYS} days!")
@@ -2474,7 +2474,7 @@ def inventory_management_page(data):
             # Translate column names
             display_df = translate_columns(display_df)
             
-            st.dataframe(display_df, width='stretch', hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
             st.caption("⭐ Quantity is the total stock - high Days of Stock indicates slow-moving items")
         else:
             st.success(f"✓ No overstocked items (>{config.OVERSTOCK_THRESHOLD_DAYS} days of stock)")
@@ -2524,7 +2524,7 @@ def inventory_management_page(data):
         # Translate column names
         display_df = translate_columns(display_df)
         
-        st.dataframe(display_df, width='stretch', hide_index=True)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity shows current stock | Total Sold shows historical sales | ABC Class based on revenue")
 
 
@@ -2626,7 +2626,7 @@ def rfm_analysis_page(data):
             st.plotly_chart(fig, width='stretch')
         
         segment_summary_display = translate_columns(segment_summary.copy())
-        st.dataframe(format_datetime_columns(segment_summary_display), width='stretch', hide_index=True)
+        st.dataframe(format_datetime_columns(segment_summary_display), use_container_width=True, hide_index=True)
         
         # Segment details
         st.subheader(t('segment_details'))
@@ -2648,7 +2648,7 @@ def rfm_analysis_page(data):
         display_cols = ['customer_name', 'phone', 'recency', 'frequency', 'monetary', 
                        'r_score', 'f_score', 'm_score', 'rfm_score']
         segment_customers_display = translate_columns(segment_customers.head(20)[display_cols].copy())
-        st.dataframe(format_datetime_columns(segment_customers_display), width='stretch', hide_index=True)
+        st.dataframe(format_datetime_columns(segment_customers_display), use_container_width=True, hide_index=True)
         
         # Export buttons
         col_btn1, col_btn2 = st.columns(2)
@@ -2950,7 +2950,7 @@ def refill_prediction_page(data):
             st.plotly_chart(fig, width='stretch')
             
             upcoming_display = translate_columns(upcoming.copy())
-            st.dataframe(format_datetime_columns(upcoming_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(upcoming_display), use_container_width=True, hide_index=True)
         else:
             st.info(f"No refills expected in the next {days_ahead} days")
     
@@ -3077,7 +3077,7 @@ def refill_prediction_page(data):
             # Full data table
             st.markdown("### 📋 Complete Overdue List")
             overdue_display = translate_columns(overdue.copy())
-            st.dataframe(format_datetime_columns(overdue_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(overdue_display), use_container_width=True, hide_index=True)
         else:
             if total_overdue > 0:
                 st.info(f"📅 No overdue refills in the past {max_overdue_days} days. ({total_overdue} customers haven't ordered in {max_overdue_days}+ days - likely lost)")
@@ -3109,7 +3109,7 @@ def refill_prediction_page(data):
                         st.success(f"{status}: {count}")
             
             schedule_display = translate_columns(schedule.copy())
-            st.dataframe(format_datetime_columns(schedule_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(schedule_display), use_container_width=True, hide_index=True)
         else:
             st.info("No refill history for this customer")
     
@@ -3136,7 +3136,7 @@ def refill_prediction_page(data):
             # Format for display
             st.write("**Top 20 Predicted Order Values**")
             top_predictions_display = translate_columns(top_predictions.copy())
-            st.dataframe(format_datetime_columns(top_predictions_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(top_predictions_display), use_container_width=True, hide_index=True)
             
             # Price trend analysis
             st.markdown("---")
@@ -3344,7 +3344,7 @@ def cross_sell_page(data):
                 # Top associations
                 st.write(f"**Top {len(affinity_filtered)} Product Pairs (by Lift)**")
                 affinity_display = translate_columns(affinity_filtered.copy())
-                st.dataframe(format_datetime_columns(affinity_display), width='stretch', hide_index=True)
+                st.dataframe(format_datetime_columns(affinity_display), use_container_width=True, hide_index=True)
                 
                 # Heatmap of top products
                 if len(affinity_filtered) >= 5:
@@ -3466,7 +3466,7 @@ def cross_sell_page(data):
                 # Detailed table
                 st.markdown("### Detailed Recommendations")
                 recommendations_display = translate_columns(recommendations.copy())
-                st.dataframe(format_datetime_columns(recommendations_display), width='stretch', hide_index=True)
+                st.dataframe(format_datetime_columns(recommendations_display), use_container_width=True, hide_index=True)
                 
                 # Explanations
                 st.markdown("---")
@@ -3623,7 +3623,7 @@ def ai_query_page(data):
                         
                         if isinstance(result['data'], list) and len(result['data']) > 0:
                             df_result = pd.DataFrame(result['data'])
-                            st.dataframe(format_datetime_columns(df_result), width='stretch', hide_index=True)
+                            st.dataframe(format_datetime_columns(df_result), use_container_width=True, hide_index=True)
                             
                             # Download button
                             csv = df_result.to_csv(index=False)
@@ -3780,7 +3780,7 @@ def export_page(data):
             
             st.success(t('report_generated'))
             report_df_display = translate_columns(report_df.copy())
-            st.dataframe(format_datetime_columns(report_df_display), width='stretch', hide_index=True)
+            st.dataframe(format_datetime_columns(report_df_display), use_container_width=True, hide_index=True)
 
 
 def main():
