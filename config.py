@@ -1066,6 +1066,7 @@ COLUMN_TRANSLATIONS = {
         'monetary': 'Monetary ($)',
         'segment': 'Segment',
         'rfm_score': 'RFM Score',
+        'phone': 'Phone',
         
         # Product metrics
         'total_revenue': 'Revenue ($)',
@@ -1186,6 +1187,7 @@ COLUMN_TRANSLATIONS = {
         'monetary': 'القيمة المالية',
         'segment': 'الشريحة',
         'rfm_score': 'نقاط RFM',
+        'phone': 'التليفونات',
         
         # Product metrics
         'total_revenue': 'الإيرادات',

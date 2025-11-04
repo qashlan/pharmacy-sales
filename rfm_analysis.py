@@ -22,6 +22,7 @@ class RFMAnalyzer:
         self.data = data
         self.current_date = data['date'].max()
         self.rfm_data = None
+        self.phone_mapping = None
         
     def calculate_rfm(self) -> pd.DataFrame:
         """
@@ -577,4 +578,82 @@ class RFMAnalyzer:
         
         return top_customers[['category', 'customer_name', 'segment', 'recency', 
                              'frequency', 'monetary']]
+    
+    def load_phone_mapping(self, phone_df: pd.DataFrame) -> bool:
+        """
+        Load phone number mapping from DataFrame.
+        
+        Args:
+            phone_df: DataFrame with columns 'اسم العميل' (customer name) and 'التليفونات' (phone)
+                     or 'customer_name' and 'phone'
+        
+        Returns:
+            Boolean indicating success
+        """
+        try:
+            # Check for Arabic column names first, then English
+            if 'اسم العميل' in phone_df.columns and 'التليفونات' in phone_df.columns:
+                phone_df = phone_df.rename(columns={
+                    'اسم العميل': 'customer_name',
+                    'التليفونات': 'phone'
+                })
+            elif 'customer_name' not in phone_df.columns or 'phone' not in phone_df.columns:
+                # Try to find similar column names
+                customer_cols = [col for col in phone_df.columns if 'customer' in col.lower() or 'عميل' in col]
+                phone_cols = [col for col in phone_df.columns if 'phone' in col.lower() or 'تليفون' in col or 'هاتف' in col]
+                
+                if customer_cols and phone_cols:
+                    phone_df = phone_df.rename(columns={
+                        customer_cols[0]: 'customer_name',
+                        phone_cols[0]: 'phone'
+                    })
+                else:
+                    return False
+            
+            # Keep only customer_name and phone columns
+            self.phone_mapping = phone_df[['customer_name', 'phone']].copy()
+            
+            # Clean customer names (strip whitespace)
+            self.phone_mapping['customer_name'] = self.phone_mapping['customer_name'].astype(str).str.strip()
+            
+            # Remove duplicates, keep first occurrence
+            self.phone_mapping = self.phone_mapping.drop_duplicates(subset='customer_name', keep='first')
+            
+            return True
+        except Exception as e:
+            print(f"Error loading phone mapping: {str(e)}")
+            return False
+    
+    def merge_phone_numbers(self, rfm_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Merge phone numbers into RFM DataFrame.
+        
+        Args:
+            rfm_df: RFM DataFrame with customer_name column
+        
+        Returns:
+            RFM DataFrame with phone column added
+        """
+        # Create a copy to avoid modifying the original
+        result = rfm_df.copy()
+        
+        if self.phone_mapping is None or len(self.phone_mapping) == 0:
+            # No phone mapping available, add empty phone column
+            result['phone'] = ''
+            return result
+        
+        # Merge phone numbers
+        result = result.merge(
+            self.phone_mapping,
+            on='customer_name',
+            how='left'
+        )
+        
+        # Ensure phone column exists and fill missing values
+        if 'phone' in result.columns:
+            result['phone'] = result['phone'].fillna('')
+        else:
+            result['phone'] = ''
+        
+        return result
 

@@ -2542,14 +2542,59 @@ def rfm_analysis_page(data):
 - {t('rfm_lost')}
     """)
     
+    # Phone mapping file uploader
+    st.markdown("---")
+    st.subheader("📱 Optional: Upload Phone Numbers")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.info("Upload an Excel file with customer names and phone numbers to include contact information in RFM analysis.")
+        phone_file = st.file_uploader(
+            "Upload phone mapping file (optional)",
+            type=['xlsx', 'xls', 'csv'],
+            help="File should contain columns: 'اسم العميل' (Customer Name) and 'التليفونات' (Phone)",
+            key='rfm_phone_upload'
+        )
+    
+    with col2:
+        st.write("")
+        st.write("")
+        if st.button("📋 Show Format Example", key='phone_format_example'):
+            example_df = pd.DataFrame({
+                'اسم العميل': ['أحمد محمد', 'سارة علي', 'محمد خالد'],
+                'التليفونات': ['0123456789', '0198765432', '0111222333']
+            })
+            st.dataframe(example_df, hide_index=True)
+    
+    st.markdown("---")
+    
+    # Initialize RFM analyzer
     analyzer = get_rfm_analyzer(data)
+    
+    # Load phone mapping if file is uploaded
+    if phone_file is not None:
+        try:
+            if phone_file.name.endswith('.csv'):
+                phone_df = pd.read_csv(phone_file)
+            else:
+                phone_df = pd.read_excel(phone_file)
+            
+            if analyzer.load_phone_mapping(phone_df):
+                st.success(f"✓ Loaded {len(analyzer.phone_mapping)} phone numbers from {phone_file.name}")
+            else:
+                st.error("❌ Could not load phone mapping. Please ensure the file has columns 'اسم العميل' and 'التليفونات'")
+        except Exception as e:
+            st.error(f"❌ Error loading phone file: {str(e)}")
+    
     rfm_data = analyzer.segment_customers()
     
+    # Merge phone numbers into RFM data
+    rfm_data = analyzer.merge_phone_numbers(rfm_data)
+    
     # Create tabs for different views
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2 = st.tabs([
         "📊 Overall Segmentation",
-        "📂 RFM by Category",
-        "📖 Understanding RFM"
+        "📂 RFM by Category"
     ])
     
     with tab1:
@@ -2594,21 +2639,55 @@ def rfm_analysis_page(data):
         
         segment_customers = analyzer.get_customers_by_segment(selected_segment)
         
-        col1, col2 = st.columns([2, 1])
+        # Merge phone numbers
+        segment_customers = analyzer.merge_phone_numbers(segment_customers)
         
-        with col1:
-            st.write(f"**{selected_segment}** - {len(segment_customers)} customers")
-            segment_customers_display = translate_columns(segment_customers.head(20).copy())
-            st.dataframe(format_datetime_columns(segment_customers_display), use_container_width=True, hide_index=True)
+        st.write(f"**{selected_segment}** - {len(segment_customers)} customers")
         
-        with col2:
-            st.write("**Recommended Actions**")
-            recommendations = analyzer.recommend_actions(selected_segment)
-            st.info(f"**Priority:** {recommendations.get('priority', 'N/A')}")
-            st.write(f"**Goal:** {recommendations.get('goal', 'N/A')}")
-            st.write("**Actions:**")
-            for action in recommendations.get('actions', []):
-                st.write(f"- {action}")
+        # Select columns to display (include phone if available)
+        display_cols = ['customer_name', 'phone', 'recency', 'frequency', 'monetary', 
+                       'r_score', 'f_score', 'm_score', 'rfm_score']
+        segment_customers_display = translate_columns(segment_customers.head(20)[display_cols].copy())
+        st.dataframe(format_datetime_columns(segment_customers_display), use_container_width=True, hide_index=True)
+        
+        # Export buttons
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            csv_segment = segment_customers[display_cols].to_csv(index=False)
+            st.download_button(
+                label=f"📥 Download All {selected_segment} Customers (CSV)",
+                data=csv_segment,
+                file_name=f"rfm_segment_{selected_segment}_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                key='download_segment_tab1'
+            )
+        
+        with col_btn2:
+            # Extract non-empty phone numbers
+            phone_numbers = segment_customers['phone'].astype(str).str.strip()
+            phone_numbers = phone_numbers[phone_numbers != ''].tolist()
+            phone_list = ', '.join(phone_numbers)
+            
+            if phone_numbers:
+                st.download_button(
+                    label=f"📱 Copy Phone Numbers ({len(phone_numbers)})",
+                    data=phone_list,
+                    file_name=f"phones_{selected_segment}_{datetime.now().strftime('%Y%m%d')}.txt",
+                    mime="text/plain",
+                    key='copy_phones_tab1'
+                )
+                # Also display in text area for easy copying
+                with st.expander("📋 View Phone Numbers"):
+                    st.text_area(
+                        "Phone numbers (comma-separated)",
+                        value=phone_list,
+                        height=100,
+                        key='phones_display_tab1',
+                        help="Select all (Ctrl+A) and copy (Ctrl+C)"
+                    )
+            else:
+                st.info("📱 No phone numbers available")
     
     with tab2:
         st.subheader(f"📂 {t('rfm_by_category')}")
@@ -2619,6 +2698,10 @@ def rfm_analysis_page(data):
         
         # Get RFM by category data
         rfm_by_category = analyzer.calculate_rfm_by_category()
+        
+        # Merge phone numbers into category data
+        rfm_by_category = analyzer.merge_phone_numbers(rfm_by_category)
+        
         category_segment_summary = analyzer.get_category_segment_summary()
         
         # Get list of categories
@@ -2723,7 +2806,9 @@ def rfm_analysis_page(data):
         # Display ALL filtered customers (not just top 50)
         st.write(f"Showing all {len(customers_display)} customers")
         
-        display_customers = customers_display[['customer_name', 'segment', 'recency', 'frequency', 'monetary']].copy()
+        # Select columns to display (include phone)
+        display_cols = ['customer_name', 'phone', 'segment', 'recency', 'frequency', 'monetary']
+        display_customers = customers_display[display_cols].copy()
         display_customers = translate_columns(display_customers)
         
         # Get translated column names for formatting
@@ -2743,66 +2828,44 @@ def rfm_analysis_page(data):
             height=600  # Set a fixed height with scrolling
         )
         
-        # Download option for filtered data
-        csv_filtered = customers_display.to_csv(index=False)
-        st.download_button(
-            label=f"📥 Download Filtered Customer Data (CSV)",
-            data=csv_filtered,
-            file_name=f"rfm_{selected_category}_{selected_segment_cat}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    
-    with tab3:
-        # Column explanations
-        st.subheader(t('understanding_metrics'))
+        # Download options for filtered data
+        col_btn1, col_btn2 = st.columns(2)
         
-        col1, col2 = st.columns(2)
+        with col_btn1:
+            csv_filtered = customers_display[display_cols].to_csv(index=False)
+            st.download_button(
+                label=f"📥 Download Filtered Customer Data (CSV)",
+                data=csv_filtered,
+                file_name=f"rfm_{selected_category}_{selected_segment_cat}_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                key='download_category_segment'
+            )
         
-        with col1:
-            st.markdown("""
-            **RFM Columns Explained:**
+        with col_btn2:
+            # Extract non-empty phone numbers
+            phone_numbers = customers_display['phone'].astype(str).str.strip()
+            phone_numbers = phone_numbers[phone_numbers != ''].tolist()
+            phone_list = ', '.join(phone_numbers)
             
-            - **Customer Name**: Unique customer identifier
-            - **Recency**: Days since last purchase (lower is better)
-            - **Frequency**: Total number of purchases/orders
-            - **Monetary**: Total amount spent by customer
-            - **R Score**: Recency score (1-5, higher = more recent)
-            - **F Score**: Frequency score (1-5, higher = more purchases)
-            - **M Score**: Monetary score (1-5, higher = more spending)
-            """)
-        
-        with col2:
-            st.markdown("""
-            **Segment Definitions:**
-            
-            - **🆕 New Customers**: 1 purchase, active within 30 days
-            - **🌱 Potential**: 2-5 purchases, showing interest
-            - **🏆 Champions**: 6+ purchases, active (0-30 days)
-            - **💎 Loyal**: 6+ purchases, engaged (30-60 days)
-            - **⚠️ At Risk**: 6+ purchases, inactive (60-90 days)
-            - **😴 Lost**: Inactive for 90+ days
-            - **🔄 Need Attention**: Customers needing re-engagement
-            """)
-        
-        st.info("💡 **Tip**: Focus on 'At Risk' customers with win-back campaigns before they become 'Lost'. Nurture 'Potential' customers to become 'Champions'!")
-        
-        st.markdown("---")
-        st.markdown("""
-        ### 📂 RFM by Category Explained
-        
-        **Category-specific RFM analysis** shows customer behavior within each product category:
-        
-        - A customer can be a **Champion** in cosmetics but **At Risk** in medications
-        - Different categories may have different customer lifecycles
-        - Helps target marketing campaigns by category interest
-        - Identify cross-selling opportunities (Champions in one category, new in another)
-        
-        **Use Cases:**
-        - Target promotions for specific categories to at-risk customers
-        - Identify category experts (Champions in specific categories)
-        - Find customers to introduce to new categories
-        - Understand category-specific customer journeys
-        """)
+            if phone_numbers:
+                st.download_button(
+                    label=f"📱 Copy Phone Numbers ({len(phone_numbers)})",
+                    data=phone_list,
+                    file_name=f"phones_{selected_category}_{selected_segment_cat}_{datetime.now().strftime('%Y%m%d')}.txt",
+                    mime="text/plain",
+                    key='copy_phones_tab2'
+                )
+                # Also display in text area for easy copying
+                with st.expander("📋 View Phone Numbers"):
+                    st.text_area(
+                        "Phone numbers (comma-separated)",
+                        value=phone_list,
+                        height=100,
+                        key='phones_display_tab2',
+                        help="Select all (Ctrl+A) and copy (Ctrl+C)"
+                    )
+            else:
+                st.info("📱 No phone numbers available")
 
 
 def refill_prediction_page(data):
