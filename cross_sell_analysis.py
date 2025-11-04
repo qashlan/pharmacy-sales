@@ -36,6 +36,14 @@ class CrossSellAnalyzer:
         # Refunds don't represent actual purchase intent/patterns
         self.data = data[~data['is_refund']].copy()
         
+        # Exclude service items from cross-sell analysis
+        # Services are not products and don't represent meaningful cross-sell patterns
+        if 'is_service' in self.data.columns:
+            num_services = self.data['is_service'].sum()
+            self.data = self.data[~self.data['is_service']].copy()
+            if num_services > 0:
+                print(f"ℹ️  Cross-Sell Analysis: Excluded {num_services} service transactions")
+        
         # OPTIMIZATION: Sample large datasets for better performance
         if enable_sampling and len(self.data) > max_records:
             print(f"⚡ Sampling {max_records:,} most recent records from {len(self.data):,} for faster analysis")

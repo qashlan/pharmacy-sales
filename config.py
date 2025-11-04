@@ -28,6 +28,7 @@ for directory in [DATA_DIR, OUTPUT_DIR, REPORTS_DIR, CHARTS_DIR]:
 
 # Column names mapping
 COLUMN_MAPPING = {
+    # English column names
     'Item Code': 'item_code',
     'Item Name': 'item_name',
     'Iten Name': 'item_name',  # Handle typo in inventory files
@@ -41,7 +42,22 @@ COLUMN_MAPPING = {
     'Date': 'date',
     'Time': 'time',
     'Category': 'category',
-    'Receipt': 'receipt'
+    'Receipt': 'receipt',
+    
+    # Arabic column names
+    'كود الصنف': 'item_code',
+    'اسم الصنف': 'item_name',
+    'عبوات': 'units',
+    'اجزاء': 'pieces',
+    'الكمية': 'quantity',
+    'سعر البيع': 'selling_price',
+    'المجموع': 'total',
+    'نوع البيع': 'sale_type',
+    'اسم العميل': 'customer_name',
+    'التاريخ': 'date',
+    'الوقت': 'time',
+    'فئة التصنيف': 'category',
+    'كود': 'receipt'
 }
 
 # Inventory management settings
@@ -183,7 +199,41 @@ TRANSLATIONS = {
         'normal_days': 'Normal Days',
         'anomalous_days': 'Anomalies',
         'detected_anomalies': 'Detected Anomalies',
+        'detected_anomalies_explanation': 'Detected Anomalies with Explanations',
         'no_overdue_refills': 'No overdue refills!',
+        'monthly_sales_category': 'Monthly Sales & Category Analysis',
+        'monthly_sales_overview': 'Monthly Sales Overview',
+        'category_spending_by_month': 'Category Spending by Month',
+        'compare_two_months': 'Compare Two Months',
+        'product_overview': 'Product Overview',
+        'sales_velocity_comparison': 'Sales Velocity Comparison',
+        'rfm_by_category': 'RFM Segmentation by Product Category',
+        'upcoming_refills_revenue': 'Upcoming Refills & Revenue Forecast',
+        'overdue_refills_lost': 'Overdue Refills & Lost Customers',
+        'order_value_price_predictions': 'Order Value & Price Predictions',
+        'detailed_anomaly_breakdown': 'Detailed Anomaly Breakdown',
+        'display_controls': 'Display Controls',
+        'no_data_monthly': 'No data available for monthly analysis',
+        'no_monthly_trend': 'No monthly trend data available',
+        'category_details': 'Category Details',
+        'category_spending_trend': 'Category Spending Trend Across All Months',
+        'no_category_data': 'No category breakdown data available',
+        'need_two_months': 'Need at least 2 months of data for comparison',
+        'category_comparison': 'Category Comparison',
+        'detailed_category_comparison': 'Detailed Category Comparison',
+        'no_category_comparison': 'No category data available for comparison',
+        'customer_display_settings': 'Customer Display Settings',
+        'customer_purchase_history': 'Customer Purchase History',
+        'category_breakdown': 'Category Breakdown',
+        'no_fast_moving': 'No fast-moving products found',
+        'no_slow_moving': 'No slow-moving products found',
+        'product_velocity_analysis': 'Product Velocity Analysis',
+        'abc_details': 'ABC Classification Details',
+        'no_inventory_uploaded': 'Please upload an inventory file or use sample inventory to begin.',
+        'category_info_unavailable': 'Category information not available in inventory data',
+        'recommended_actions': 'Recommended Actions',
+        'actions': 'Actions',
+        'no_anomalies_detected': 'No anomalies detected with current sensitivity setting. Try increasing sensitivity to detect more outliers.',
         
         # Customer Insights
         'customer_metrics': 'Customer Metrics',
@@ -608,7 +658,41 @@ TRANSLATIONS = {
         'normal_days': 'أيام عادية',
         'anomalous_days': 'حالات شاذة',
         'detected_anomalies': 'الحالات الشاذة المكتشفة',
+        'detected_anomalies_explanation': 'الحالات الشاذة المكتشفة مع التفسيرات',
         'no_overdue_refills': 'لا توجد إعادة شراء متأخرة!',
+        'monthly_sales_category': 'المبيعات الشهرية وتحليل الفئات',
+        'monthly_sales_overview': 'نظرة عامة على المبيعات الشهرية',
+        'category_spending_by_month': 'إنفاق الفئات حسب الشهر',
+        'compare_two_months': 'مقارنة شهرين',
+        'product_overview': 'نظرة عامة على المنتجات',
+        'sales_velocity_comparison': 'مقارنة سرعة المبيعات',
+        'rfm_by_category': 'تصنيف RFM حسب فئة المنتج',
+        'upcoming_refills_revenue': 'إعادة الشراء القادمة وتوقع الإيرادات',
+        'overdue_refills_lost': 'إعادة الشراء المتأخرة والعملاء المفقودون',
+        'order_value_price_predictions': 'توقعات قيمة الطلب والأسعار',
+        'detailed_anomaly_breakdown': 'تفصيل الحالات الشاذة',
+        'display_controls': 'عناصر التحكم بالعرض',
+        'no_data_monthly': 'لا توجد بيانات متاحة للتحليل الشهري',
+        'no_monthly_trend': 'لا توجد بيانات اتجاه شهرية متاحة',
+        'category_details': 'تفاصيل الفئة',
+        'category_spending_trend': 'اتجاه إنفاق الفئات عبر كل الأشهر',
+        'no_category_data': 'لا توجد بيانات تفصيل الفئات متاحة',
+        'need_two_months': 'يجب توفر شهرين على الأقل من البيانات للمقارنة',
+        'category_comparison': 'مقارنة الفئات',
+        'detailed_category_comparison': 'مقارنة الفئات التفصيلية',
+        'no_category_comparison': 'لا توجد بيانات فئات متاحة للمقارنة',
+        'customer_display_settings': 'إعدادات عرض العملاء',
+        'customer_purchase_history': 'سجل مشتريات العميل',
+        'category_breakdown': 'تفصيل الفئات',
+        'no_fast_moving': 'لم يتم العثور على منتجات سريعة الحركة',
+        'no_slow_moving': 'لم يتم العثور على منتجات بطيئة الحركة',
+        'product_velocity_analysis': 'تحليل سرعة المنتجات',
+        'abc_details': 'تفاصيل تصنيف ABC',
+        'no_inventory_uploaded': 'يرجى تحميل ملف المخزون أو استخدام مخزون عينة للبدء.',
+        'category_info_unavailable': 'معلومات الفئة غير متوفرة في بيانات المخزون',
+        'recommended_actions': 'الإجراءات الموصى بها',
+        'actions': 'الإجراءات',
+        'no_anomalies_detected': 'لم يتم الكشف عن حالات شاذة بإعدادات الحساسية الحالية. حاول زيادة الحساسية للكشف عن المزيد من القيم المتطرفة.',
         
         # Customer Insights
         'customer_metrics': 'مقاييس العملاء',
@@ -931,6 +1015,258 @@ TRANSLATIONS = {
         'reorder_settings': 'إعدادات إعادة الطلب',
     }
 }
+
+# Column name translations for dataframes
+COLUMN_TRANSLATIONS = {
+    'en': {
+        # Common columns
+        'customer_name': 'Customer',
+        'customer': 'Customer',
+        'item_name': 'Product',
+        'product': 'Product',
+        'item_code': 'Item Code',
+        'category': 'Category',
+        'date': 'Date',
+        'time': 'Time',
+        'order_id': 'Order ID',
+        'receipt': 'Receipt',
+        'quantity': 'Quantity',
+        'units': 'Units',
+        'pieces': 'Pieces',
+        'revenue': 'Revenue',
+        'total': 'Total',
+        'selling_price': 'Price',
+        'price': 'Price',
+        'orders': 'Orders',
+        'count': 'Count',
+        
+        # Sales metrics
+        'revenue_ma7': '7-Day Avg',
+        'revenue_pct': 'Revenue %',
+        'refund_amount': 'Refund Amount',
+        'refund_quantity': 'Refund Qty',
+        'refund_rate': 'Refund Rate %',
+        'refund_orders': 'Refund Orders',
+        'gross_revenue': 'Gross Revenue',
+        'net_revenue': 'Net Revenue',
+        'mom_growth': 'MoM Growth %',
+        'items_sold': 'Items Sold',
+        'items_refunded': 'Items Refunded',
+        'avg_order_value': 'Avg Order Value',
+        
+        # Customer metrics
+        'days_since_last_purchase': 'Days Since Last Purchase',
+        'total_spent': 'Total Spent',
+        'avg_spend': 'Avg Spend',
+        'purchase_count': 'Purchases',
+        'first_purchase': 'First Purchase',
+        'last_purchase': 'Last Purchase',
+        'recency': 'Recency (days)',
+        'frequency': 'Frequency',
+        'monetary': 'Monetary ($)',
+        'segment': 'Segment',
+        'rfm_score': 'RFM Score',
+        
+        # Product metrics
+        'total_revenue': 'Revenue ($)',
+        'total_quantity': 'Quantity',
+        'price_per_unit': 'Price Per Unit',
+        'avg_price': 'Avg Price',
+        'days_since_last_sale': 'Days Since Last Sale',
+        'velocity': 'Velocity (units/day)',
+        'daily_velocity': 'Daily Velocity',
+        'abc_class': 'ABC Class',
+        'lifecycle_stage': 'Lifecycle Stage',
+        'cumulative_revenue': 'Cumulative Revenue',
+        'cumulative_revenue_pct': 'Cumulative Revenue %',
+        'cumulative_quantity': 'Cumulative Quantity',
+        'net_quantity': 'Net Quantity',
+        
+        # Inventory metrics
+        'current_stock': 'Current Stock',
+        'reorder_point': 'Reorder Point',
+        'safety_stock': 'Safety Stock',
+        'days_of_stock': 'Days of Stock',
+        'order_quantity': 'Order Qty',
+        'priority': 'Priority',
+        'signal': 'Signal',
+        'stockout_date': 'Stockout Date',
+        'estimated_date': 'Est. Date',
+        'potential_lost_revenue': 'Potential Lost Revenue',
+        'overstock_value': 'Overstock Value',
+        'stock_on_hand': 'Stock on Hand',
+        'total_quantity_sold': 'Total Sold',
+        
+        # Refill prediction
+        'next_refill_date': 'Next Refill Date',
+        'expected_date': 'Expected Date',
+        'days_overdue': 'Days Overdue',
+        'refill_interval': 'Interval (days)',
+        'avg_interval': 'Avg Interval',
+        'confidence_score': 'Confidence',
+        'regularity_score': 'Regularity',
+        'predicted_value': 'Predicted Value',
+        'predicted_unit_price': 'Predicted Price',
+        'predicted_quantity': 'Predicted Qty',
+        'avg_price_per_unit': 'Avg Price/Unit',
+        'price_trend': 'Price Trend',
+        'churn_risk': 'Churn Risk',
+        
+        # Cross-sell metrics
+        'support': 'Support',
+        'confidence': 'Confidence',
+        'lift': 'Lift',
+        'antecedents': 'Product A',
+        'consequents': 'Product B',
+        'bundle_size': 'Bundle Size',
+        'bundle_frequency': 'Frequency',
+        'avg_bundle_value': 'Avg Value',
+        
+        # Comparison columns
+        'change': 'Change',
+        'change_pct': 'Change %',
+        'month': 'Month',
+        'week': 'Week',
+        'day_of_week': 'Day of Week',
+        'hour': 'Hour',
+        
+        # Anomaly detection
+        'anomaly_score': 'Anomaly Score',
+        'anomaly_reason': 'Why Anomalous?',
+        'revenue_change_pct': 'Revenue Δ%',
+        'orders_change_pct': 'Orders Δ%',
+        'quantity_change_pct': 'Quantity Δ%',
+    },
+    'ar': {
+        # Common columns
+        'customer_name': 'اسم العميل',
+        'customer': 'اسم العميل',
+        'item_name': 'اسم الصنف',
+        'product': 'اسم الصنف',
+        'item_code': 'كود الصنف',
+        'category': 'فئة التصنيف',
+        'date': 'التاريخ',
+        'time': 'الوقت',
+        'order_id': 'رقم الطلب',
+        'receipt': 'كود',
+        'quantity': 'الكمية',
+        'units': 'عبوات',
+        'pieces': 'اجزاء',
+        'revenue': 'الإيرادات',
+        'total': 'المجموع',
+        'selling_price': 'سعر البيع',
+        'price': 'سعر البيع',
+        'sale_type': 'نوع البيع',
+        'orders': 'الطلبات',
+        'count': 'العدد',
+        
+        # Sales metrics
+        'revenue_ma7': 'متوسط 7 أيام',
+        'revenue_pct': '٪ الإيرادات',
+        'refund_amount': 'قيمة المرتجع',
+        'refund_quantity': 'كمية المرتجعات',
+        'refund_rate': '٪ المرتجعات',
+        'refund_orders': 'طلبات المرتجعات',
+        'gross_revenue': 'الإيرادات الإجمالية',
+        'net_revenue': 'صافي الإيرادات',
+        'mom_growth': '٪ النمو الشهري',
+        'items_sold': 'المنتجات المباعة',
+        'items_refunded': 'المنتجات المرتجعة',
+        'avg_order_value': 'متوسط قيمة الطلب',
+        
+        # Customer metrics
+        'days_since_last_purchase': 'أيام منذ آخر شراء',
+        'total_spent': 'إجمالي الإنفاق',
+        'avg_spend': 'متوسط الإنفاق',
+        'purchase_count': 'المشتريات',
+        'first_purchase': 'أول شراء',
+        'last_purchase': 'آخر شراء',
+        'recency': 'الحداثة (أيام)',
+        'frequency': 'التكرار',
+        'monetary': 'القيمة المالية',
+        'segment': 'الشريحة',
+        'rfm_score': 'نقاط RFM',
+        
+        # Product metrics
+        'total_revenue': 'الإيرادات',
+        'total_quantity': 'الكمية',
+        'price_per_unit': 'سعر الوحدة',
+        'avg_price': 'متوسط السعر',
+        'days_since_last_sale': 'أيام منذ آخر بيع',
+        'velocity': 'السرعة (وحدات/يوم)',
+        'daily_velocity': 'السرعة اليومية',
+        'abc_class': 'فئة ABC',
+        'lifecycle_stage': 'مرحلة دورة الحياة',
+        'cumulative_revenue': 'الإيرادات التراكمية',
+        'cumulative_revenue_pct': '٪ الإيرادات التراكمية',
+        'cumulative_quantity': 'الكمية التراكمية',
+        'net_quantity': 'صافي الكمية',
+        
+        # Inventory metrics
+        'current_stock': 'المخزون الحالي',
+        'reorder_point': 'نقطة إعادة الطلب',
+        'safety_stock': 'مخزون الأمان',
+        'days_of_stock': 'أيام المخزون',
+        'order_quantity': 'كمية الطلب',
+        'priority': 'الأولوية',
+        'signal': 'الإشارة',
+        'stockout_date': 'تاريخ النفاد',
+        'estimated_date': 'التاريخ المقدر',
+        'potential_lost_revenue': 'الإيرادات المحتملة المفقودة',
+        'overstock_value': 'قيمة المخزون الزائد',
+        'stock_on_hand': 'المخزون المتاح',
+        'total_quantity_sold': 'إجمالي المبيعات',
+        
+        # Refill prediction
+        'next_refill_date': 'تاريخ إعادة الشراء القادم',
+        'expected_date': 'التاريخ المتوقع',
+        'days_overdue': 'أيام التأخير',
+        'refill_interval': 'الفترة (أيام)',
+        'avg_interval': 'متوسط الفترة',
+        'confidence_score': 'الثقة',
+        'regularity_score': 'الانتظام',
+        'predicted_value': 'القيمة المتوقعة',
+        'predicted_unit_price': 'السعر المتوقع',
+        'predicted_quantity': 'الكمية المتوقعة',
+        'avg_price_per_unit': 'متوسط السعر/الوحدة',
+        'price_trend': 'اتجاه السعر',
+        'churn_risk': 'خطر الفقدان',
+        
+        # Cross-sell metrics
+        'support': 'الدعم',
+        'confidence': 'الثقة',
+        'lift': 'الرفع',
+        'antecedents': 'المنتج أ',
+        'consequents': 'المنتج ب',
+        'bundle_size': 'حجم الحزمة',
+        'bundle_frequency': 'التكرار',
+        'avg_bundle_value': 'متوسط القيمة',
+        
+        # Comparison columns
+        'change': 'التغيير',
+        'change_pct': '٪ التغيير',
+        'month': 'الشهر',
+        'week': 'الأسبوع',
+        'day_of_week': 'يوم الأسبوع',
+        'hour': 'الساعة',
+        
+        # Anomaly detection
+        'anomaly_score': 'نقاط الشذوذ',
+        'anomaly_reason': 'سبب الشذوذ',
+        'revenue_change_pct': 'Δ٪ الإيرادات',
+        'orders_change_pct': 'Δ٪ الطلبات',
+        'quantity_change_pct': 'Δ٪ الكمية',
+    }
+}
+
+# Service items configuration
+# These items generate revenue but are not physical products (e.g., service fees)
+# They will be excluded from product-focused analyses (inventory, ABC, cross-sell)
+# but included in revenue calculations
+SERVICE_ITEMS = [
+    'خدمة فيزا',      # Visa/card payment service fee
+    'خدمة توصيل',     # Delivery service fee
+]
 
 # OpenAI API configuration (optional, for AI features)
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')

@@ -16,8 +16,17 @@ class ProductAnalyzer:
         Args:
             data: Preprocessed sales DataFrame
         """
-        self.data = data
-        self.current_date = data['date'].max()
+        # Filter out service items - they're not physical products
+        # Services are excluded from all product analyses (ABC, velocity, lifecycle, etc.)
+        if 'is_service' in data.columns:
+            self.data = data[~data['is_service']].copy()
+            num_services_excluded = data['is_service'].sum()
+            if num_services_excluded > 0:
+                print(f"ℹ️  Product Analysis: Excluded {num_services_excluded} service transactions from product metrics")
+        else:
+            self.data = data
+        
+        self.current_date = self.data['date'].max()
         # Cache for expensive computations
         self._product_summary_cache: Optional[pd.DataFrame] = None
         

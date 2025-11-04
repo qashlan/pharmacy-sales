@@ -55,11 +55,41 @@ def t(key, **kwargs):
             pass  # If formatting fails, return unformatted text
     return text
 
+def tc(column_name):
+    """Translate column name based on current language."""
+    col_translations = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+    return col_translations.get(column_name, column_name)
+
+def translate_columns(df, column_mapping=None):
+    """
+    Translate dataframe column names to current language.
+    
+    Args:
+        df: DataFrame to translate
+        column_mapping: Optional dict of column renames to apply before translation
+                       (maps raw column name to standard name)
+    
+    Returns:
+        DataFrame with translated column names
+    """
+    df = df.copy()
+    
+    # Apply custom mapping first if provided
+    if column_mapping:
+        df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+    
+    # Then translate to current language
+    col_translations = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+    df = df.rename(columns={k: col_translations.get(k, k) for k in df.columns})
+    
+    return df
+
 # Custom CSS with RTL support
 def get_custom_css(is_rtl=False):
     """Generate custom CSS based on language direction."""
     direction = "rtl" if is_rtl else "ltr"
     text_align = "right" if is_rtl else "left"
+    slider_transform = "scaleX(-1)" if is_rtl else "scaleX(1)"
     
     return f"""
     <style>
@@ -100,8 +130,22 @@ def get_custom_css(is_rtl=False):
     }}
     
     /* Tabs */
+    .stTabs {{
+        direction: {direction};
+    }}
+    
     .stTabs [data-baseweb="tab-list"] {{
         direction: {direction};
+    }}
+    
+    .stTabs [data-baseweb="tab"] {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    .stTabs [data-baseweb="tab-panel"] {{
+        direction: {direction};
+        text-align: {text_align};
     }}
     
     /* Buttons */
@@ -117,9 +161,188 @@ def get_custom_css(is_rtl=False):
         text-align: {text_align};
     }}
     
+    /* Enhanced RTL support for selectbox */
+    .stSelectbox {{
+        direction: {direction};
+    }}
+    
+    .stSelectbox [data-baseweb="select"] {{
+        direction: {direction};
+    }}
+    
+    .stSelectbox [data-baseweb="select"] > div {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL dropdown menu */
+    .stSelectbox [role="listbox"],
+    .stSelectbox [data-baseweb="popover"] {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    .stSelectbox [role="option"] {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* Enhanced RTL support for multiselect */
+    .stMultiSelect {{
+        direction: {direction};
+    }}
+    
+    .stMultiSelect [data-baseweb="select"] {{
+        direction: {direction};
+    }}
+    
+    .stMultiSelect [data-baseweb="select"] > div {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL for multiselect tags/chips */
+    .stMultiSelect [data-baseweb="tag"] {{
+        direction: {direction};
+    }}
+    
+    /* RTL dropdown menu for multiselect */
+    .stMultiSelect [role="listbox"],
+    .stMultiSelect [data-baseweb="popover"] {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    .stMultiSelect [role="option"] {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL support for date input */
+    .stDateInput {{
+        direction: {direction};
+    }}
+    
+    .stDateInput > div > div > input {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL support for radio buttons */
+    .stRadio {{
+        direction: {direction};
+    }}
+    
+    .stRadio > div {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    .stRadio [role="radiogroup"] {{
+        direction: {direction};
+    }}
+    
+    .stRadio label {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL support for checkbox */
+    .stCheckbox {{
+        direction: {direction};
+    }}
+    
+    .stCheckbox > label {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL support for slider */
+    .stSlider {{
+        direction: ltr;
+    }}
+    
+    /* Flip slider track and thumb in RTL mode */
+    .stSlider [data-baseweb="slider"] {{
+        transform: {slider_transform};
+    }}
+    
+    /* Keep labels readable - no transform */
+    .stSlider label,
+    .stSlider > label {{
+        direction: ltr;
+        text-align: {text_align};
+    }}
+    
+    .stSlider [data-testid="stMarkdownContainer"] {{
+        direction: ltr;
+    }}
+    
+    /* RTL support for number input */
+    .stNumberInput {{
+        direction: {direction};
+    }}
+    
+    .stNumberInput > div > div > input {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
     /* Dataframes */
     .stDataFrame {{
         direction: {direction};
+    }}
+    
+    /* RTL support for table structure */
+    .stDataFrame table {{
+        direction: {direction};
+    }}
+    
+    .stDataFrame thead th,
+    .stDataFrame tbody td {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL for all table elements */
+    div[data-testid="stDataFrame"] table,
+    div[data-testid="stDataFrame"] thead,
+    div[data-testid="stDataFrame"] tbody,
+    div[data-testid="stDataFrame"] tr,
+    div[data-testid="stDataFrame"] th,
+    div[data-testid="stDataFrame"] td {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* RTL for styled dataframes */
+    .dataframe {{
+        direction: {direction};
+    }}
+    
+    .dataframe thead th,
+    .dataframe tbody td {{
+        direction: {direction};
+        text-align: {text_align};
+    }}
+    
+    /* Row hover highlighting for dataframes */
+    div[data-testid="stDataFrame"] tbody tr:hover {{
+        background-color: #e3f2fd !important;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }}
+    
+    /* Alternative selector for styled dataframes */
+    .dataframe tbody tr:hover {{
+        background-color: #e3f2fd !important;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }}
+    
+    /* Row hover for Streamlit's internal table structure */
+    [data-testid="stDataFrame"] [data-testid="stDataFrameResizable"] tbody tr:hover td {{
+        background-color: #e3f2fd !important;
     }}
     
     /* Chat messages */
@@ -439,25 +662,19 @@ def sales_analysis_page(data):
         
         # Data table with renamed columns
         top_products_display = top_products.copy()
-        column_renames = {
-            'item_code': 'Item Code',
-            'item_name': 'Item Name',
-            'units': 'Units',
-            'pieces': 'Pieces',
-            'quantity': 'Quantity ⭐',
-            'price_per_unit': 'Price Per Unit',
-            'revenue': 'Revenue ($)',
-            'orders': 'Orders'
-        }
-        top_products_display = top_products_display.rename(columns={
-            k: v for k, v in column_renames.items() if k in top_products_display.columns
-        })
         
-        # Format revenue column if present
-        if 'Revenue ($)' in top_products_display.columns:
-            top_products_display['Revenue ($)'] = top_products_display['Revenue ($)'].apply(lambda x: f"${x:,.2f}")
-        if 'Price Per Unit' in top_products_display.columns:
-            top_products_display['Price Per Unit'] = top_products_display['Price Per Unit'].apply(lambda x: f"${x:,.2f}")
+        # Format currency columns before translation
+        if 'revenue' in top_products_display.columns:
+            top_products_display['revenue'] = top_products_display['revenue'].apply(lambda x: f"${x:,.2f}")
+        if 'price_per_unit' in top_products_display.columns:
+            top_products_display['price_per_unit'] = top_products_display['price_per_unit'].apply(lambda x: f"${x:,.2f}")
+        
+        # Add special marker to quantity column
+        if 'quantity' in top_products_display.columns:
+            top_products_display = top_products_display.rename(columns={'quantity': 'quantity ⭐'})
+        
+        # Translate all column names
+        top_products_display = translate_columns(top_products_display)
         
         st.dataframe(
             format_datetime_columns(top_products_display),
@@ -573,7 +790,7 @@ def sales_analysis_page(data):
         
         # Show anomalous days
         if len(anomaly_days) > 0:
-            st.subheader("Detected Anomalies with Explanations")
+            st.subheader(t('detected_anomalies_explanation'))
             
             # Add summary of normal baseline
             if len(normal_days) > 0:
@@ -589,12 +806,17 @@ def sales_analysis_page(data):
                 'anomaly_reason', 'anomaly_score'
             ]].sort_values('date', ascending=False).copy()
             
-            # Rename columns for better display
-            anomaly_display.columns = [
-                'Date', 'Revenue ($)', 'Orders', 'Quantity',
-                'Revenue Δ%', 'Orders Δ%', 'Quantity Δ%',
-                'Why Anomalous?', 'Anomaly Score'
-            ]
+            # Rename columns to match translation keys
+            anomaly_display = anomaly_display.rename(columns={
+                'total': 'revenue',
+                'num_orders': 'orders',
+                'revenue_diff_pct': 'revenue_change_pct',
+                'orders_diff_pct': 'orders_change_pct',
+                'quantity_diff_pct': 'quantity_change_pct'
+            })
+            
+            # Translate column names
+            anomaly_display = translate_columns(anomaly_display)
             
             # Format the dataframe
             st.dataframe(
@@ -604,7 +826,7 @@ def sales_analysis_page(data):
             )
             
             # Add detailed view with expandable sections
-            st.markdown("### 🔍 Detailed Anomaly Breakdown")
+            st.markdown(f"### 🔍 {t('detailed_anomaly_breakdown')}")
             for idx, row in anomaly_days.sort_values('date', ascending=False).iterrows():
                 with st.expander(f"📅 {row['date'].strftime('%Y-%m-%d (%A)')} - {row['anomaly_reason']}"):
                     col1, col2, col3 = st.columns(3)
@@ -640,7 +862,7 @@ def sales_analysis_page(data):
                             f"({'⚠️ Significant' if abs(row['quantity_zscore']) > 2 else '✓ Normal'})")
                     st.write(f"- Anomaly Score: {row['anomaly_score']:.3f} (more negative = more anomalous)")
         else:
-            st.info("No anomalies detected with current sensitivity setting. Try increasing sensitivity to detect more outliers.")
+            st.info(t('no_anomalies_detected'))
     
     with tab5:
         st.subheader(t('refund_analysis'))
@@ -676,7 +898,7 @@ def sales_analysis_page(data):
                 )
             
             # Controls for refunded products and customers (outside tabs to prevent reset)
-            st.markdown("### 🎛️ Display Controls")
+            st.markdown(f"### 🎛️ {t('display_controls')}")
             col_ctrl1, col_ctrl2 = st.columns(2)
             with col_ctrl1:
                 n_refunded = st.slider(
@@ -729,13 +951,10 @@ def sales_analysis_page(data):
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Detailed table - shows same number as slider
+                    refund_products_display = top_refunded.head(n_refunded).copy()
+                    refund_products_display = translate_columns(refund_products_display)
                     st.dataframe(
-                        top_refunded.head(n_refunded).rename(columns={
-                            'item_name': t('product'),
-                            'refund_amount': t('refund_amount'),
-                            'refund_quantity': t('quantity'),
-                            'refund_orders': t('orders')
-                        }),
+                        refund_products_display,
                         use_container_width=True,
                         hide_index=True
                     )
@@ -762,12 +981,10 @@ def sales_analysis_page(data):
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Detailed table - shows same number as slider
+                    refund_customers_display = top_refund_customers.head(n_refund_customers).copy()
+                    refund_customers_display = translate_columns(refund_customers_display)
                     st.dataframe(
-                        top_refund_customers.head(n_refund_customers).rename(columns={
-                            'customer_name': t('customer'),
-                            'refund_amount': t('refund_amount'),
-                            'refund_orders': t('orders')
-                        }),
+                        refund_customers_display,
                         use_container_width=True,
                         hide_index=True
                     )
@@ -880,22 +1097,17 @@ def sales_analysis_page(data):
                     
                     refund_display = refund_display.sort_values('date', ascending=False)
                     
-                    # Rename columns
-                    column_renames = {
-                        'date': t('date'),
-                        'order_id': 'Order ID',
-                        'customer_name': 'Customer',
-                        'item_name': 'Product',
-                        'units': 'Units',
-                        'pieces': 'Pieces',
-                        'quantity': 'Quantity ⭐',
-                        'total': t('refund_amount')
-                    }
+                    # Rename 'total' to 'refund_amount' and add marker to quantity
+                    if 'total' in refund_display.columns:
+                        refund_display = refund_display.rename(columns={'total': 'refund_amount'})
+                    if 'quantity' in refund_display.columns:
+                        refund_display = refund_display.rename(columns={'quantity': 'quantity ⭐'})
+                    
+                    # Translate column names
+                    refund_display = translate_columns(refund_display)
                     
                     st.dataframe(
-                        format_datetime_columns(refund_display.rename(columns={
-                            k: v for k, v in column_renames.items() if k in refund_display.columns
-                        })),
+                        format_datetime_columns(refund_display),
                         use_container_width=True,
                         hide_index=True
                     )
@@ -915,7 +1127,7 @@ def sales_analysis_page(data):
 
 def monthly_analysis_page(data):
     """Monthly sales and category analysis with comparison."""
-    st.header("📅 Monthly Sales & Category Analysis")
+    st.header(f"📅 {t('monthly_sales_category')}")
     
     analyzer = get_sales_analyzer(data)
     
@@ -923,7 +1135,7 @@ def monthly_analysis_page(data):
     available_months = analyzer.get_available_months()
     
     if len(available_months) == 0:
-        st.warning("No data available for monthly analysis")
+        st.warning(t('no_data_monthly'))
         return
     
     # Create tabs for different views
@@ -934,7 +1146,7 @@ def monthly_analysis_page(data):
     ])
     
     with tab1:
-        st.subheader("Monthly Sales Overview")
+        st.subheader(t('monthly_sales_overview'))
         
         # Get monthly trends
         monthly_trends = analyzer.get_monthly_trends()
@@ -946,26 +1158,44 @@ def monthly_analysis_page(data):
                 'orders', 'refund_orders', 'customers', 'items_sold', 'items_refunded', 'mom_growth'
             ]].copy()
             
-            display_monthly.columns = [
-                'Month', 'Gross Revenue', 'Refunds', 'Net Revenue', 'Refund Rate %',
-                'Orders', 'Refund Orders', 'Customers', 'Items Sold', 'Items Refunded', 'MoM Growth %'
-            ]
+            # Rename columns to match translation keys
+            display_monthly = display_monthly.rename(columns={
+                'year_month': 'month',
+                'revenue': 'net_revenue',
+                'refund_rate': 'refund_rate'
+            })
+            
+            # Translate column names
+            display_monthly = translate_columns(display_monthly)
+            
+            # Get translated column names for formatting
+            trans_cols = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+            gross_col = trans_cols.get('gross_revenue', 'Gross Revenue')
+            refund_col = trans_cols.get('refund_amount', 'Refunds')
+            net_col = trans_cols.get('net_revenue', 'Net Revenue')
+            rate_col = trans_cols.get('refund_rate', 'Refund Rate %')
+            orders_col = trans_cols.get('orders', 'Orders')
+            refund_orders_col = trans_cols.get('refund_orders', 'Refund Orders')
+            customers_col = trans_cols.get('customers', 'Customers')
+            items_sold_col = trans_cols.get('items_sold', 'Items Sold')
+            items_refunded_col = trans_cols.get('items_refunded', 'Items Refunded')
+            mom_col = trans_cols.get('mom_growth', 'MoM Growth %')
             
             st.dataframe(
                 display_monthly.style.format({
-                    'Gross Revenue': '${:,.2f}',
-                    'Refunds': '${:,.2f}',
-                    'Net Revenue': '${:,.2f}',
-                    'Refund Rate %': '{:.2f}%',
-                    'Orders': '{:,.0f}',
-                    'Refund Orders': '{:,.0f}',
-                    'Customers': '{:,.0f}',
-                    'Items Sold': '{:,.0f}',
-                    'Items Refunded': '{:,.0f}',
-                    'MoM Growth %': '{:+.2f}%'
+                    gross_col: '${:,.2f}',
+                    refund_col: '${:,.2f}',
+                    net_col: '${:,.2f}',
+                    rate_col: '{:.2f}%',
+                    orders_col: '{:,.0f}',
+                    refund_orders_col: '{:,.0f}',
+                    customers_col: '{:,.0f}',
+                    items_sold_col: '{:,.0f}',
+                    items_refunded_col: '{:,.0f}',
+                    mom_col: '{:+.2f}%'
                 }).applymap(
                     lambda x: 'background-color: #ffe6e6' if 'Refund' in str(x) else '',
-                    subset=['Refunds', 'Refund Orders', 'Items Refunded', 'Refund Rate %']
+                    subset=[refund_col, refund_orders_col, items_refunded_col, rate_col]
                 ),
                 use_container_width=True,
                 hide_index=True
@@ -993,10 +1223,10 @@ def monthly_analysis_page(data):
             
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No monthly trend data available")
+            st.info(t('no_monthly_trend'))
     
     with tab2:
-        st.subheader("Category Spending by Month")
+        st.subheader(t('category_spending_by_month'))
         
         # Get monthly category breakdown
         monthly_category = analyzer.get_monthly_category_breakdown()
@@ -1053,21 +1283,40 @@ def monthly_analysis_page(data):
                 display_categories['revenue_pct'] = (display_categories['revenue'] / display_categories['revenue'].sum() * 100).round(2)
                 display_categories = display_categories.sort_values('revenue', ascending=False)
                 
-                display_categories.columns = ['Category', 'Gross Revenue', 'Refunds', 'Net Revenue', 
-                                               'Refund Rate %', 'Quantity', 'Qty Refunded', 
-                                               'Orders', 'Avg Order Value', 'Revenue %']
+                # Rename columns to match translation keys
+                display_categories = display_categories.rename(columns={
+                    'revenue': 'gross_revenue',
+                    'net_revenue': 'net_revenue',
+                    'refund_quantity': 'refund_quantity'
+                })
+                
+                # Translate column names
+                display_categories = translate_columns(display_categories)
+                
+                # Get translated column names for formatting
+                trans_cols = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+                cat_col = trans_cols.get('category', 'Category')
+                gross_col = trans_cols.get('gross_revenue', 'Gross Revenue')
+                refund_col = trans_cols.get('refund_amount', 'Refunds')
+                net_col = trans_cols.get('net_revenue', 'Net Revenue')
+                rate_col = trans_cols.get('refund_rate', 'Refund Rate %')
+                qty_col = trans_cols.get('quantity', 'Quantity')
+                qty_refund_col = trans_cols.get('refund_quantity', 'Qty Refunded')
+                orders_col = trans_cols.get('orders', 'Orders')
+                aov_col = trans_cols.get('avg_order_value', 'Avg Order Value')
+                rev_pct_col = trans_cols.get('revenue_pct', 'Revenue %')
                 
                 st.dataframe(
                     display_categories.style.format({
-                        'Gross Revenue': '${:,.2f}',
-                        'Refunds': '${:,.2f}',
-                        'Net Revenue': '${:,.2f}',
-                        'Refund Rate %': '{:.2f}%',
-                        'Quantity': '{:,.0f}',
-                        'Qty Refunded': '{:,.0f}',
-                        'Orders': '{:,.0f}',
-                        'Avg Order Value': '${:,.2f}',
-                        'Revenue %': '{:.2f}%'
+                        gross_col: '${:,.2f}',
+                        refund_col: '${:,.2f}',
+                        net_col: '${:,.2f}',
+                        rate_col: '{:.2f}%',
+                        qty_col: '{:,.0f}',
+                        qty_refund_col: '{:,.0f}',
+                        orders_col: '{:,.0f}',
+                        aov_col: '${:,.2f}',
+                        rev_pct_col: '{:.2f}%'
                     }),
                     use_container_width=True,
                     hide_index=True
@@ -1130,7 +1379,7 @@ def monthly_analysis_page(data):
             st.info("No category breakdown data available")
     
     with tab3:
-        st.subheader("Compare Two Months")
+        st.subheader(t('compare_two_months'))
         
         if len(available_months) < 2:
             st.warning("Need at least 2 months of data for comparison")
@@ -1228,32 +1477,41 @@ def monthly_analysis_page(data):
                             'quantity_m1', 'quantity_m2', 'orders_m1', 'orders_m2'
                         ]].copy()
                         
+                        # Use translated terms for column headers
+                        trans_cols = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+                        cat_label = trans_cols.get('category', 'Category')
+                        rev_label = trans_cols.get('revenue', 'Revenue')
+                        qty_label = trans_cols.get('quantity', 'Qty')
+                        orders_label = trans_cols.get('orders', 'Orders')
+                        change_label = trans_cols.get('change', 'Change')
+                        change_pct_label = trans_cols.get('change_pct', 'Change %')
+                        
                         display_comp.columns = [
-                            'Category',
-                            f'{month1_name} Revenue',
-                            f'{month2_name} Revenue',
-                            'Revenue Change',
-                            'Change %',
-                            f'{month1_name} Qty',
-                            f'{month2_name} Qty',
-                            f'{month1_name} Orders',
-                            f'{month2_name} Orders'
+                            cat_label,
+                            f'{month1_name} {rev_label}',
+                            f'{month2_name} {rev_label}',
+                            f'{rev_label} {change_label}',
+                            change_pct_label,
+                            f'{month1_name} {qty_label}',
+                            f'{month2_name} {qty_label}',
+                            f'{month1_name} {orders_label}',
+                            f'{month2_name} {orders_label}'
                         ]
                         
                         st.dataframe(
                             display_comp.style.format({
-                                f'{month1_name} Revenue': '${:,.2f}',
-                                f'{month2_name} Revenue': '${:,.2f}',
-                                'Revenue Change': '${:,.2f}',
-                                'Change %': '{:+.2f}%',
-                                f'{month1_name} Qty': '{:,.0f}',
-                                f'{month2_name} Qty': '{:,.0f}',
-                                f'{month1_name} Orders': '{:,.0f}',
-                                f'{month2_name} Orders': '{:,.0f}'
+                                f'{month1_name} {rev_label}': '${:,.2f}',
+                                f'{month2_name} {rev_label}': '${:,.2f}',
+                                f'{rev_label} {change_label}': '${:,.2f}',
+                                change_pct_label: '{:+.2f}%',
+                                f'{month1_name} {qty_label}': '{:,.0f}',
+                                f'{month2_name} {qty_label}': '{:,.0f}',
+                                f'{month1_name} {orders_label}': '{:,.0f}',
+                                f'{month2_name} {orders_label}': '{:,.0f}'
                             }).applymap(
                                 lambda x: 'color: green' if isinstance(x, str) and '+' in str(x) and '%' in str(x) else 
                                          ('color: red' if isinstance(x, str) and '-' in str(x) and '%' in str(x) else ''),
-                                subset=['Change %']
+                                subset=[change_pct_label]
                             ),
                             use_container_width=True,
                             hide_index=True
@@ -1329,10 +1587,10 @@ def customer_analysis_page(data):
     ])
     
     with tab1:
-        st.subheader("Valuable Customers")
+        st.subheader(t('valuable_customers'))
         
         # Add controls for adjusting number of customers to display
-        st.markdown("### 👥 Customer Display Settings")
+        st.markdown(f"### 👥 {t('customer_display_settings')}")
         col_control1, col_control2 = st.columns(2)
         
         with col_control1:
@@ -1362,16 +1620,18 @@ def customer_analysis_page(data):
         with col1:
             st.write(f"**High-Value Customers (by Spend) - Top {n_high_value}**")
             high_value = analyzer.get_high_value_customers(n_high_value)
-            st.dataframe(format_datetime_columns(high_value), use_container_width=True, hide_index=True)
+            high_value_display = translate_columns(high_value.copy())
+            st.dataframe(format_datetime_columns(high_value_display), use_container_width=True, hide_index=True)
         
         with col2:
             st.write(f"**Frequent Buyers - Top {n_frequent}**")
             frequent = analyzer.get_frequent_buyers(n_frequent)
-            st.dataframe(format_datetime_columns(frequent), use_container_width=True, hide_index=True)
+            frequent_display = translate_columns(frequent.copy())
+            st.dataframe(format_datetime_columns(frequent_display), use_container_width=True, hide_index=True)
         
         # Add customer product history section
         st.markdown("---")
-        st.markdown("### 🛒 Customer Purchase History")
+        st.markdown(f"### 🛒 {t('customer_purchase_history')}")
         st.markdown("Select a customer to view all products they have purchased")
         
         # Get list of all customers
@@ -1412,8 +1672,9 @@ def customer_analysis_page(data):
                     
                     # Display product history table
                     st.markdown(f"#### Products purchased by **{selected_customer}**")
+                    product_history_display = translate_columns(product_history.copy())
                     st.dataframe(
-                        format_datetime_columns(product_history),
+                        format_datetime_columns(product_history_display),
                         use_container_width=True,
                         hide_index=True
                     )
@@ -1462,8 +1723,10 @@ def customer_analysis_page(data):
                             'times_purchased': 'sum',
                             'item_name': 'count'
                         }).reset_index()
-                        category_summary.columns = ['Category', 'Total Spent', 'Total Quantity', 'Times Purchased', 'Product Count']
-                        category_summary = category_summary.sort_values('Total Spent', ascending=False)
+                        # Rename to match translation keys and translate
+                        category_summary.columns = ['category', 'total_spent', 'total_quantity', 'times_purchased', 'count']
+                        category_summary = category_summary.sort_values('total_spent', ascending=False)
+                        category_summary = translate_columns(category_summary)
                         
                         col_cat1, col_cat2 = st.columns([2, 1])
                         
@@ -1501,7 +1764,7 @@ def customer_analysis_page(data):
                     st.warning(f"No purchase history found for {selected_customer}")
     
     with tab2:
-        st.subheader("Churn Risk Analysis")
+        st.subheader(t('churn_risk_analysis'))
         
         threshold = st.slider("Inactivity threshold (days)", 30, 180, 90, key='customer_churn_threshold')
         churn_risk = analyzer.get_churn_risk_customers(threshold)
@@ -1524,12 +1787,13 @@ def customer_analysis_page(data):
             )
             st.plotly_chart(fig, use_container_width=True)
             
-            st.dataframe(format_datetime_columns(churn_risk), use_container_width=True, hide_index=True)
+            churn_risk_display = translate_columns(churn_risk.copy())
+            st.dataframe(format_datetime_columns(churn_risk_display), use_container_width=True, hide_index=True)
         else:
             st.success("No customers at risk of churning!")
     
     with tab3:
-        st.subheader("Customer Segmentation by Value")
+        st.subheader(t('customer_segmentation'))
         
         segments = analyzer.get_customer_segments_by_value()
         
@@ -1545,6 +1809,11 @@ def customer_analysis_page(data):
             })
         
         segment_df = pd.DataFrame(segment_data)
+        
+        # Translate segment dataframe columns
+        segment_df_translated = segment_df.copy()
+        segment_df_translated.columns = ['segment', 'customers', 'revenue', 'avg_spend', 'revenue_pct']
+        segment_df_translated = translate_columns(segment_df_translated)
         
         col1, col2 = st.columns(2)
         
@@ -1566,10 +1835,10 @@ def customer_analysis_page(data):
             )
             st.plotly_chart(fig_revenue, use_container_width=True)
         
-        st.dataframe(format_datetime_columns(segment_df), use_container_width=True, hide_index=True)
+        st.dataframe(format_datetime_columns(segment_df_translated), use_container_width=True, hide_index=True)
     
     with tab4:
-        st.subheader("New Customers")
+        st.subheader(t('new_customers'))
         
         days_back = st.slider("Recent period (days)", 7, 90, 30, key='customer_new_days_back')
         new_customers = analyzer.get_new_customers(days_back)
@@ -1589,7 +1858,9 @@ def customer_analysis_page(data):
             )
             st.plotly_chart(fig, use_container_width=True)
             
-            st.dataframe(format_datetime_columns(new_customers), use_container_width=True, hide_index=True)
+            # Translate columns in dataframe
+            new_customers_display = translate_columns(new_customers.copy())
+            st.dataframe(format_datetime_columns(new_customers_display), use_container_width=True, hide_index=True)
         else:
             st.info(f"No new customers in the last {days_back} days")
 
@@ -1601,7 +1872,7 @@ def product_analysis_page(data):
     analyzer = get_product_analyzer(data)
     
     # Display overall product metrics including refunds
-    st.subheader("📊 Product Overview")
+    st.subheader(f"📊 {t('product_overview')}")
     product_summary = analyzer.get_product_summary()
     
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -1628,7 +1899,7 @@ def product_analysis_page(data):
     
     with tab1:
         # Add controls for adjusting number of products to display
-        st.markdown("### 📊 Product Velocity Analysis")
+        st.markdown(f"### 📊 {t('product_velocity_analysis')}")
         col_control1, col_control2 = st.columns(2)
         
         with col_control1:
@@ -1663,21 +1934,11 @@ def product_analysis_page(data):
                 # Format the dataframe for better display
                 fast_movers_display = fast_movers.copy()
                 
-                # Rename columns for clarity
-                column_renames = {
-                    'item_code': 'Item Code',
-                    'item_name': 'Item Name',
-                    'category': 'Category',
-                    'units_sold': 'Units Sold',
-                    'pieces_sold': 'Pieces Sold',
-                    'quantity_sold': 'Quantity Sold ⭐',
-                    'revenue': 'Revenue',
-                    'orders': 'Orders',
-                    'days_since_last_sale': 'Days Since Last Sale'
-                }
-                fast_movers_display = fast_movers_display.rename(columns={
-                    k: v for k, v in column_renames.items() if k in fast_movers_display.columns
-                })
+                # Add marker to quantity column and translate
+                if 'quantity_sold' in fast_movers_display.columns:
+                    fast_movers_display = fast_movers_display.rename(columns={'quantity_sold': 'quantity_sold ⭐'})
+                
+                fast_movers_display = translate_columns(fast_movers_display)
                 
                 st.dataframe(format_datetime_columns(fast_movers_display), use_container_width=True, hide_index=True)
                 st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
@@ -1698,7 +1959,7 @@ def product_analysis_page(data):
                 with col_s4:
                     st.metric("Net Quantity", f"{total_fast_net:,.0f}")
             else:
-                st.warning("No fast-moving products found")
+                st.warning(t('no_fast_moving'))
         
         with col2:
             st.subheader(f"🐌 Slow-Moving Products (Bottom {n_slow})")
@@ -1708,21 +1969,11 @@ def product_analysis_page(data):
                 # Format the dataframe for better display
                 slow_movers_display = slow_movers.copy()
                 
-                # Rename columns for clarity
-                column_renames = {
-                    'item_code': 'Item Code',
-                    'item_name': 'Item Name',
-                    'category': 'Category',
-                    'units_sold': 'Units Sold',
-                    'pieces_sold': 'Pieces Sold',
-                    'quantity_sold': 'Quantity Sold ⭐',
-                    'revenue': 'Revenue',
-                    'orders': 'Orders',
-                    'days_since_last_sale': 'Days Since Last Sale'
-                }
-                slow_movers_display = slow_movers_display.rename(columns={
-                    k: v for k, v in column_renames.items() if k in slow_movers_display.columns
-                })
+                # Add marker to quantity column and translate
+                if 'quantity_sold' in slow_movers_display.columns:
+                    slow_movers_display = slow_movers_display.rename(columns={'quantity_sold': 'quantity_sold ⭐'})
+                
+                slow_movers_display = translate_columns(slow_movers_display)
                 
                 st.dataframe(format_datetime_columns(slow_movers_display), use_container_width=True, hide_index=True)
                 st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
@@ -1746,12 +1997,12 @@ def product_analysis_page(data):
                 with col_s5:
                     st.metric("Avg Days Since Sale", f"{avg_days_since_sale:.0f}")
             else:
-                st.info("No slow-moving products found")
+                st.info(t('no_slow_moving'))
         
         # Add velocity comparison chart
         if len(fast_movers) > 0 and len(slow_movers) > 0:
             st.markdown("---")
-            st.subheader("📈 Sales Velocity Comparison")
+            st.subheader(f"📈 {t('sales_velocity_comparison')}")
             
             # Combine top 5 from each for comparison
             comparison_fast = fast_movers.head(5).copy()
@@ -1775,7 +2026,7 @@ def product_analysis_page(data):
             st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
-        st.subheader("ABC Classification")
+        st.subheader(t('abc_classification'))
         st.write("**A-items:** Top 20% products generating 80% revenue")
         st.write("**B-items:** Next 30% products generating 15% revenue")
         st.write("**C-items:** Remaining 50% products generating 5% revenue")
@@ -1790,23 +2041,30 @@ def product_analysis_page(data):
             'refund_quantity': 'sum',
             'net_quantity': 'sum'
         }).reset_index()
-        abc_summary.columns = ['Class', 'Products', 'Revenue', 'Quantity Sold', 'Refund Quantity', 'Net Quantity']
+        # Rename to match translation keys
+        abc_summary.columns = ['abc_class', 'count', 'revenue', 'quantity', 'refund_quantity', 'net_quantity']
         
         col1, col2 = st.columns(2)
         
         with col1:
+            # Create chart before translation
             fig = px.bar(
                 abc_summary,
-                x='Class',
-                y='Revenue',
+                x='abc_class',
+                y='revenue',
                 title='Revenue by ABC Class',
-                color='Class',
+                color='abc_class',
                 color_discrete_map={'A': 'green', 'B': 'orange', 'C': 'red'}
             )
+            # Update axis labels
+            fig.update_xaxes(title_text=t('abc_class') if 'abc_class' in config.TRANSLATIONS[CURRENT_LANG] else 'ABC Class')
+            fig.update_yaxes(title_text=t('revenue') if 'revenue' in config.TRANSLATIONS[CURRENT_LANG] else 'Revenue')
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            st.dataframe(format_datetime_columns(abc_summary), use_container_width=True, hide_index=True)
+            # Translate for display in table
+            abc_summary_display = translate_columns(abc_summary)
+            st.dataframe(format_datetime_columns(abc_summary_display), use_container_width=True, hide_index=True)
         
         # Full table
         class_filter = st.multiselect(
@@ -1817,27 +2075,17 @@ def product_analysis_page(data):
         )
         filtered_abc = abc_data[abc_data['abc_class'].isin(class_filter)].copy()
         
-        # Rename columns for clarity
-        column_renames = {
-            'item_code': 'Item Code',
-            'item_name': 'Item Name',
-            'category': 'Category',
-            'abc_class': 'ABC Class',
-            'units_sold': 'Units Sold',
-            'pieces_sold': 'Pieces Sold',
-            'quantity_sold': 'Quantity Sold ⭐',
-            'revenue': 'Revenue',
-            'cumulative_revenue_pct': 'Cumulative Revenue %'
-        }
-        filtered_abc = filtered_abc.rename(columns={
-            k: v for k, v in column_renames.items() if k in filtered_abc.columns
-        })
+        # Add marker to quantity and translate columns
+        if 'quantity_sold' in filtered_abc.columns:
+            filtered_abc = filtered_abc.rename(columns={'quantity_sold': 'quantity_sold ⭐'})
+        
+        filtered_abc = translate_columns(filtered_abc)
         
         st.dataframe(format_datetime_columns(filtered_abc), use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity Sold = total units sold (ABC classification based on revenue)")
     
     with tab3:
-        st.subheader("Product Lifecycle Stages")
+        st.subheader(t('product_lifecycle_stages'))
         
         lifecycle = analyzer.get_product_lifecycle_stage()
         
@@ -1864,22 +2112,12 @@ def product_analysis_page(data):
             )
             st.plotly_chart(fig, use_container_width=True)
         
-        # Rename columns for clarity
+        # Add marker to quantity and translate columns
         lifecycle_display = lifecycle.copy()
-        column_renames = {
-            'item_code': 'Item Code',
-            'item_name': 'Item Name',
-            'category': 'Category',
-            'lifecycle_stage': 'Lifecycle Stage',
-            'units_sold': 'Units Sold',
-            'pieces_sold': 'Pieces Sold',
-            'quantity_sold': 'Quantity Sold ⭐',
-            'revenue': 'Revenue',
-            'days_since_last_sale': 'Days Since Last Sale'
-        }
-        lifecycle_display = lifecycle_display.rename(columns={
-            k: v for k, v in column_renames.items() if k in lifecycle_display.columns
-        })
+        if 'quantity_sold' in lifecycle_display.columns:
+            lifecycle_display = lifecycle_display.rename(columns={'quantity_sold': 'quantity_sold ⭐'})
+        
+        lifecycle_display = translate_columns(lifecycle_display)
         
         st.dataframe(format_datetime_columns(lifecycle_display), use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity Sold = total units sold (lifecycle stage based on sales trends)")
@@ -2011,7 +2249,8 @@ def inventory_management_page(data):
         
         if len(category_df) > 0:
             # Category table FIRST
-            st.dataframe(category_df, use_container_width=True, hide_index=True)
+            category_df_display = translate_columns(category_df.copy())
+            st.dataframe(category_df_display, use_container_width=True, hide_index=True)
             
             st.markdown("---")
             
@@ -2117,26 +2356,12 @@ def inventory_management_page(data):
             [col for col in display_cols if col in filtered_df.columns]
         ].copy()
         
-        # Rename columns for display
-        column_renames = {
-            'item_code': 'Item Code',
-            'item_name': 'Item Name',
-            'category': 'Category',
-            'units': 'Units',
-            'pieces': 'Pieces',
-            'quantity': 'Quantity ⭐',  # Star to indicate this is the authoritative value
-            'reorder_signal': 'Signal',
-            'reorder_point': t('reorder_point'),
-            'days_of_stock': t('days_of_stock'),
-            'daily_sales_velocity': t('daily_velocity'),
-            'quantity_to_order': t('order_quantity'),
-            'priority_score': t('priority')
-        }
+        # Add marker to quantity column and translate
+        if 'quantity' in display_df.columns:
+            display_df = display_df.rename(columns={'quantity': 'quantity ⭐'})
         
-        # Apply column renames
-        display_df = display_df.rename(columns={
-            k: v for k, v in column_renames.items() if k in display_df.columns
-        })
+        # Translate all column names
+        display_df = translate_columns(display_df)
         
         st.dataframe(
             display_df,
@@ -2192,25 +2417,18 @@ def inventory_management_page(data):
             
             display_df = stockout_risk[[col for col in display_cols if col in stockout_risk.columns]].copy()
             
-            # Rename columns for clarity
-            column_renames = {
-                'item_name': 'Item Name',
-                'category': 'Category',
-                'units': 'Units',
-                'pieces': 'Pieces',
-                'quantity': 'Quantity ⭐',
-                'predicted_stockout_days': 'Days Until Stockout',
-                'estimated_stockout_date': 'Estimated Date',
-                'daily_sales_velocity': 'Daily Velocity',
-                'potential_lost_revenue': 'Potential Lost Revenue'
-            }
-            display_df = display_df.rename(columns={
-                k: v for k, v in column_renames.items() if k in display_df.columns
-            })
+            # Add marker to quantity column and translate
+            if 'quantity' in display_df.columns:
+                display_df = display_df.rename(columns={'quantity': 'quantity ⭐'})
             
-            # Format dates
-            if 'Estimated Date' in display_df.columns:
-                display_df['Estimated Date'] = pd.to_datetime(display_df['Estimated Date']).dt.strftime('%Y-%m-%d')
+            # Translate column names
+            display_df = translate_columns(display_df)
+            
+            # Format dates after translation
+            trans_cols = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+            est_date_col = trans_cols.get('estimated_date', 'Estimated Date')
+            if est_date_col in display_df.columns:
+                display_df[est_date_col] = pd.to_datetime(display_df[est_date_col]).dt.strftime('%Y-%m-%d')
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             st.caption("⭐ Quantity is the total stock used for stockout prediction")
@@ -2249,20 +2467,12 @@ def inventory_management_page(data):
             
             display_df = overstocked[[col for col in display_cols if col in overstocked.columns]].head(50)
             
-            # Rename columns for clarity
-            column_renames = {
-                'item_name': 'Item Name',
-                'category': 'Category',
-                'units': 'Units',
-                'pieces': 'Pieces',
-                'quantity': 'Quantity ⭐',
-                'days_of_stock': 'Days of Stock',
-                'daily_sales_velocity': 'Daily Velocity',
-                'overstock_value': 'Overstock Value'
-            }
-            display_df = display_df.rename(columns={
-                k: v for k, v in column_renames.items() if k in display_df.columns
-            })
+            # Add marker to quantity column and translate
+            if 'quantity' in display_df.columns:
+                display_df = display_df.rename(columns={'quantity': 'quantity ⭐'})
+            
+            # Translate column names
+            display_df = translate_columns(display_df)
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             st.caption("⭐ Quantity is the total stock - high Days of Stock indicates slow-moving items")
@@ -2307,20 +2517,12 @@ def inventory_management_page(data):
         
         display_df = abc_df[[col for col in display_cols if col in abc_df.columns]].head(50)
         
-        # Rename columns for clarity
-        column_renames = {
-            'item_name': 'Item Name',
-            'abc_class': 'ABC Class',
-            'units': 'Units',
-            'pieces': 'Pieces',
-            'quantity': 'Quantity ⭐',
-            'total_revenue': 'Total Revenue',
-            'cumulative_revenue_pct': 'Cumulative Revenue %',
-            'total_quantity_sold': 'Total Sold'
-        }
-        display_df = display_df.rename(columns={
-            k: v for k, v in column_renames.items() if k in display_df.columns
-        })
+        # Add marker to quantity column and translate
+        if 'quantity' in display_df.columns:
+            display_df = display_df.rename(columns={'quantity': 'quantity ⭐'})
+        
+        # Translate column names
+        display_df = translate_columns(display_df)
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         st.caption("⭐ Quantity shows current stock | Total Sold shows historical sales | ABC Class based on revenue")
@@ -2352,7 +2554,7 @@ def rfm_analysis_page(data):
     
     with tab1:
         # Segment summary
-        st.subheader("Segment Overview")
+        st.subheader(t('segment_overview'))
         segment_summary = analyzer.get_segment_summary()
         
         col1, col2 = st.columns(2)
@@ -2378,10 +2580,11 @@ def rfm_analysis_page(data):
             fig.update_xaxes(tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
         
-        st.dataframe(format_datetime_columns(segment_summary), use_container_width=True, hide_index=True)
+        segment_summary_display = translate_columns(segment_summary.copy())
+        st.dataframe(format_datetime_columns(segment_summary_display), use_container_width=True, hide_index=True)
         
         # Segment details
-        st.subheader("Segment Details")
+        st.subheader(t('segment_details'))
         
         selected_segment = st.selectbox(
             "Select segment to explore",
@@ -2395,7 +2598,8 @@ def rfm_analysis_page(data):
         
         with col1:
             st.write(f"**{selected_segment}** - {len(segment_customers)} customers")
-            st.dataframe(format_datetime_columns(segment_customers.head(20)), use_container_width=True, hide_index=True)
+            segment_customers_display = translate_columns(segment_customers.head(20).copy())
+            st.dataframe(format_datetime_columns(segment_customers_display), use_container_width=True, hide_index=True)
         
         with col2:
             st.write("**Recommended Actions**")
@@ -2407,7 +2611,7 @@ def rfm_analysis_page(data):
                 st.write(f"- {action}")
     
     with tab2:
-        st.subheader("📂 RFM Segmentation by Product Category")
+        st.subheader(f"📂 {t('rfm_by_category')}")
         st.markdown("""
         This view shows how customers behave within each product category. 
         A customer might be a **Champion** in one category but **At Risk** in another!
@@ -2474,18 +2678,25 @@ def rfm_analysis_page(data):
             'avg_recency', 'avg_frequency'
         ]].copy()
         
-        display_summary.columns = [
-            'Segment', 'Customers', 'Revenue', '% of Category', 
-            'Avg Days Since Purchase', 'Avg Purchases'
-        ]
+        # Rename to match translation keys
+        display_summary.columns = ['segment', 'customers', 'revenue', 'revenue_pct', 'recency', 'frequency']
+        display_summary = translate_columns(display_summary)
+        
+        # Get translated column names for formatting
+        trans_cols = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+        cust_col = trans_cols.get('customers', 'Customers')
+        rev_col = trans_cols.get('revenue', 'Revenue')
+        rev_pct_col = trans_cols.get('revenue_pct', '% of Category')
+        rec_col = trans_cols.get('recency', 'Recency')
+        freq_col = trans_cols.get('frequency', 'Frequency')
         
         st.dataframe(
             display_summary.style.format({
-                'Customers': '{:,.0f}',
-                'Revenue': '${:,.2f}',
-                '% of Category': '{:.1f}%',
-                'Avg Days Since Purchase': '{:.0f}',
-                'Avg Purchases': '{:.1f}'
+                cust_col: '{:,.0f}',
+                rev_col: '${:,.2f}',
+                rev_pct_col: '{:.1f}%',
+                rec_col: '{:.0f}',
+                freq_col: '{:.1f}'
             }),
             use_container_width=True,
             hide_index=True
@@ -2513,13 +2724,19 @@ def rfm_analysis_page(data):
         st.write(f"Showing all {len(customers_display)} customers")
         
         display_customers = customers_display[['customer_name', 'segment', 'recency', 'frequency', 'monetary']].copy()
-        display_customers.columns = ['Customer', 'Segment', 'Days Since Purchase', 'Purchases', 'Total Spent']
+        display_customers = translate_columns(display_customers)
+        
+        # Get translated column names for formatting
+        trans_cols = config.COLUMN_TRANSLATIONS.get(CURRENT_LANG, config.COLUMN_TRANSLATIONS['en'])
+        rec_col = trans_cols.get('recency', 'Recency')
+        freq_col = trans_cols.get('frequency', 'Frequency')
+        mon_col = trans_cols.get('monetary', 'Monetary')
         
         st.dataframe(
             display_customers.style.format({
-                'Days Since Purchase': '{:.0f}',
-                'Purchases': '{:.0f}',
-                'Total Spent': '${:,.2f}'
+                rec_col: '{:.0f}',
+                freq_col: '{:.0f}',
+                mon_col: '${:,.2f}'
             }),
             use_container_width=True,
             hide_index=True,
@@ -2537,7 +2754,7 @@ def rfm_analysis_page(data):
     
     with tab3:
         # Column explanations
-        st.subheader("📖 Understanding the Metrics")
+        st.subheader(t('understanding_metrics'))
         
         col1, col2 = st.columns(2)
         
@@ -2621,7 +2838,7 @@ def refill_prediction_page(data):
     ])
     
     with tab1:
-        st.subheader("📅 Upcoming Refills & Revenue Forecast")
+        st.subheader(f"📅 {t('upcoming_refills_revenue')}")
         
         days_ahead = st.slider("Look ahead (days)", 7, 60, 30, key='refill_days_ahead')
         upcoming = predictor.get_upcoming_refills(days_ahead)
@@ -2669,12 +2886,13 @@ def refill_prediction_page(data):
             )
             st.plotly_chart(fig, use_container_width=True)
             
-            st.dataframe(format_datetime_columns(upcoming), use_container_width=True, hide_index=True)
+            upcoming_display = translate_columns(upcoming.copy())
+            st.dataframe(format_datetime_columns(upcoming_display), use_container_width=True, hide_index=True)
         else:
             st.info(f"No refills expected in the next {days_ahead} days")
     
     with tab2:
-        st.subheader("⚠️ Overdue Refills & Lost Customers")
+        st.subheader(f"⚠️ {t('overdue_refills_lost')}")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -2795,7 +3013,8 @@ def refill_prediction_page(data):
             
             # Full data table
             st.markdown("### 📋 Complete Overdue List")
-            st.dataframe(format_datetime_columns(overdue), use_container_width=True, hide_index=True)
+            overdue_display = translate_columns(overdue.copy())
+            st.dataframe(format_datetime_columns(overdue_display), use_container_width=True, hide_index=True)
         else:
             if total_overdue > 0:
                 st.info(f"📅 No overdue refills in the past {max_overdue_days} days. ({total_overdue} customers haven't ordered in {max_overdue_days}+ days - likely lost)")
@@ -2803,7 +3022,7 @@ def refill_prediction_page(data):
                 st.success("✅ No overdue refills!")
     
     with tab3:
-        st.subheader("Customer Refill Schedule")
+        st.subheader(t('customer_refill_schedule'))
         
         # Customer selection
         customers = data['customer_name'].unique()
@@ -2826,12 +3045,13 @@ def refill_prediction_page(data):
                     else:
                         st.success(f"{status}: {count}")
             
-            st.dataframe(format_datetime_columns(schedule), use_container_width=True, hide_index=True)
+            schedule_display = translate_columns(schedule.copy())
+            st.dataframe(format_datetime_columns(schedule_display), use_container_width=True, hide_index=True)
         else:
             st.info("No refill history for this customer")
     
     with tab4:
-        st.subheader("💰 Order Value & Price Predictions")
+        st.subheader(f"💰 {t('order_value_price_predictions')}")
         
         if intervals_df is not None and len(intervals_df) > 0:
             st.markdown("""
@@ -2852,7 +3072,8 @@ def refill_prediction_page(data):
             
             # Format for display
             st.write("**Top 20 Predicted Order Values**")
-            st.dataframe(format_datetime_columns(top_predictions), use_container_width=True, hide_index=True)
+            top_predictions_display = translate_columns(top_predictions.copy())
+            st.dataframe(format_datetime_columns(top_predictions_display), use_container_width=True, hide_index=True)
             
             # Price trend analysis
             st.markdown("---")
@@ -2893,7 +3114,7 @@ def refill_prediction_page(data):
             
             # Summary insights
             st.markdown("---")
-            st.subheader("💡 Key Insights")
+            st.subheader(t('key_insights'))
             
             total_predicted_revenue = intervals_df['predicted_order_value'].sum()
             avg_confidence = intervals_df['confidence_score'].mean()
@@ -2967,7 +3188,7 @@ def cross_sell_page(data):
     ])
     
     with tab1:
-        st.subheader("Suggested Product Bundles")
+        st.subheader(t('suggested_bundles'))
         
         st.markdown("Bundles are groups of products frequently purchased together in the same transaction.")
         
@@ -2986,8 +3207,10 @@ def cross_sell_page(data):
             st.success(f"✓ Found {len(bundles)} product bundles!")
             
             # Show summary table
+            bundles_display = bundles[['bundle_items', 'itemset_size', 'bundle_frequency', 'support', 'bundle_revenue', 'avg_basket_value']].copy()
+            bundles_display = translate_columns(bundles_display)
             st.dataframe(
-                bundles[['bundle_items', 'itemset_size', 'bundle_frequency', 'support', 'bundle_revenue', 'avg_basket_value']],
+                bundles_display,
                 use_container_width=True,
                 hide_index=True
             )
@@ -3030,7 +3253,7 @@ def cross_sell_page(data):
             )
     
     with tab2:
-        st.subheader("Product Affinity Analysis")
+        st.subheader(t('product_affinity'))
         
         st.markdown("""
         **Product affinity** shows which products are frequently purchased together. 
@@ -3057,7 +3280,8 @@ def cross_sell_page(data):
             if len(affinity_filtered) > 0:
                 # Top associations
                 st.write(f"**Top {len(affinity_filtered)} Product Pairs (by Lift)**")
-                st.dataframe(format_datetime_columns(affinity_filtered), use_container_width=True, hide_index=True)
+                affinity_display = translate_columns(affinity_filtered.copy())
+                st.dataframe(format_datetime_columns(affinity_display), use_container_width=True, hide_index=True)
                 
                 # Heatmap of top products
                 if len(affinity_filtered) >= 5:
@@ -3108,7 +3332,7 @@ def cross_sell_page(data):
             )
     
     with tab3:
-        st.subheader("Market Basket Insights")
+        st.subheader(t('market_basket_insights'))
         
         basket_insights = analyzer.get_customer_basket_insights()
         
@@ -3134,7 +3358,7 @@ def cross_sell_page(data):
         st.plotly_chart(fig, use_container_width=True)
     
     with tab4:
-        st.subheader("Product Recommendations")
+        st.subheader(t('product_recommendations'))
         
         st.markdown("""
         Get personalized product recommendations based on purchase patterns. 
@@ -3178,7 +3402,8 @@ def cross_sell_page(data):
                 
                 # Detailed table
                 st.markdown("### Detailed Recommendations")
-                st.dataframe(format_datetime_columns(recommendations), use_container_width=True, hide_index=True)
+                recommendations_display = translate_columns(recommendations.copy())
+                st.dataframe(format_datetime_columns(recommendations_display), use_container_width=True, hide_index=True)
                 
                 # Explanations
                 st.markdown("---")
@@ -3272,7 +3497,7 @@ def ai_query_page(data):
                 st.write(f"• {example}")
     
     # Query input
-    st.subheader("Ask Your Question")
+    st.subheader(t('ask_your_question'))
     
     # Pre-filled examples
     example_questions = [
@@ -3331,7 +3556,7 @@ def ai_query_page(data):
                     
                     # Show data if available
                     if 'data' in result and result['data']:
-                        st.subheader("Detailed Data")
+                        st.subheader(t('detailed_data'))
                         
                         if isinstance(result['data'], list) and len(result['data']) > 0:
                             df_result = pd.DataFrame(result['data'])
@@ -3358,7 +3583,7 @@ def ai_query_page(data):
                     # Show recommendations
                     if 'recommendations' in result and result['recommendations']:
                         st.markdown("---")
-                        st.subheader("💡 Recommendations")
+                        st.subheader(f"💡 {t('recommendations')}")
                         for rec in result['recommendations']:
                             st.info(rec)
                     
@@ -3396,7 +3621,7 @@ def ai_query_page(data):
     # GPT Chat Feature (if OpenAI is enabled)
     if engine.openai_enabled:
         st.markdown("---")
-        st.subheader("💬 AI Chat")
+        st.subheader(t('ai_chat'))
         st.markdown("Have a conversation with the AI about your sales data")
         
         # Initialize chat history in session state
@@ -3491,7 +3716,8 @@ def export_page(data):
             )
             
             st.success(t('report_generated'))
-            st.dataframe(format_datetime_columns(report_df), use_container_width=True, hide_index=True)
+            report_df_display = translate_columns(report_df.copy())
+            st.dataframe(format_datetime_columns(report_df_display), use_container_width=True, hide_index=True)
 
 
 def main():

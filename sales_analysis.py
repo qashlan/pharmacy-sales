@@ -79,7 +79,7 @@ class SalesAnalyzer:
     
     def get_overall_metrics(self, month: Optional[str] = None) -> Dict:
         """
-        Calculate overall sales metrics with refund handling.
+        Calculate overall sales metrics with refund and service handling.
         
         Args:
             month: Optional month in YYYY-MM format. If None, calculates for all data.
@@ -90,10 +90,18 @@ class SalesAnalyzer:
         sales_df = df[~df['is_refund']]
         refunds_df = df[df['is_refund']]
         
+        # Separate services from products
+        service_df = df[df.get('is_service', False)] if 'is_service' in df.columns else pd.DataFrame()
+        product_df = df[~df.get('is_service', False)] if 'is_service' in df.columns else df
+        
         # Revenue metrics
         gross_revenue = sales_df['total'].sum()
         refund_amount = abs(refunds_df['total'].sum())
         net_revenue = df['total'].sum()  # Already includes negative refunds
+        
+        # Service vs product revenue breakdown
+        service_revenue = service_df[~service_df['is_refund']]['total'].sum() if len(service_df) > 0 else 0
+        product_revenue = product_df[~product_df['is_refund']]['total'].sum() if len(product_df) > 0 else 0
         
         # Order and customer metrics
         total_orders = df['order_id'].nunique()
@@ -131,6 +139,9 @@ class SalesAnalyzer:
             'refund_amount': refund_amount,
             'net_revenue': net_revenue,
             'total_revenue': net_revenue,  # Alias for backward compatibility
+            'service_revenue': service_revenue,
+            'product_revenue': product_revenue,
+            'service_revenue_pct': (service_revenue / gross_revenue * 100) if gross_revenue > 0 else 0,
             'refund_rate_pct': refund_rate,
             'total_orders': total_orders,
             'unique_orders': total_orders,  # Alias for dashboard compatibility
@@ -148,6 +159,7 @@ class SalesAnalyzer:
             'end_date': df['date'].max(),
             'num_refund_transactions': len(refunds_df),
             'num_sales_transactions': len(sales_df),
+            'num_service_transactions': len(service_df[~service_df['is_refund']]) if len(service_df) > 0 else 0,
             'refund_transaction_rate_pct': refund_transaction_rate
         }
     
@@ -262,6 +274,8 @@ class SalesAnalyzer:
         - Quantity: Total effective quantity sold (can be fractional) ⭐
         - Price Per Unit: Average price per unit sold
         
+        Note: Service items (خدمة فيزا, خدمة توصيل) are excluded from this analysis.
+        
         Args:
             n: Number of top products to return
             metric: 'revenue', 'quantity', or 'orders'
@@ -270,8 +284,10 @@ class SalesAnalyzer:
         # Filter by month if specified
         filtered_data = self.filter_by_month(month)
         
-        # Filter out refunds for top products analysis
+        # Filter out refunds and service items for top products analysis
         sales_data = filtered_data[~filtered_data['is_refund']].copy()
+        if 'is_service' in sales_data.columns:
+            sales_data = sales_data[~sales_data['is_service']].copy()
         
         # Determine which columns are available
         agg_dict = {
@@ -340,12 +356,18 @@ class SalesAnalyzer:
         """
         Get top product categories by revenue.
         
+        Note: Service items are excluded from category analysis.
+        
         Args:
             n: Number of top categories to return
             month: Optional month in YYYY-MM format. If None, calculates for all data.
         """
         # Filter by month if specified
         filtered_data = self.filter_by_month(month)
+        
+        # Filter out service items
+        if 'is_service' in filtered_data.columns:
+            filtered_data = filtered_data[~filtered_data['is_service']].copy()
         
         top_cat = filtered_data.groupby('category').agg({
             'total': 'sum',

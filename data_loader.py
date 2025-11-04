@@ -332,6 +332,17 @@ class DataLoader:
         # Ensure quantity matches the sign of total for refunds
         df.loc[df['is_refund'], 'quantity'] = -abs(df.loc[df['is_refund'], 'quantity'])
         
+        # SERVICE ITEM HANDLING: Flag service items (non-physical products)
+        # Service items contribute to revenue but are not actual products
+        df['is_service'] = df['item_name'].isin(config.SERVICE_ITEMS)
+        
+        # Count service transactions for reporting
+        num_services = df['is_service'].sum()
+        if num_services > 0:
+            service_revenue = df[df['is_service']]['total'].sum()
+            print(f"ℹ️  Identified {num_services} service transactions (revenue: ${service_revenue:,.2f})")
+            print(f"   Service items: {', '.join(config.SERVICE_ITEMS)}")
+        
         return df
     
     def get_data_summary(self) -> dict:
@@ -345,10 +356,18 @@ class DataLoader:
         sales_df = df[~df['is_refund']]
         refunds_df = df[df['is_refund']]
         
+        # Separate service items from products
+        service_df = df[df['is_service']]
+        product_df = df[~df['is_service']]
+        
         # Calculate net revenue (sales - refunds)
         gross_revenue = sales_df['total'].sum()
         refund_amount = abs(refunds_df['total'].sum())
         net_revenue = df['total'].sum()  # This already includes negative refunds
+        
+        # Calculate service vs product revenue
+        service_revenue = service_df[~service_df['is_refund']]['total'].sum()
+        product_revenue = product_df[~product_df['is_refund']]['total'].sum()
         
         return {
             'total_records': len(df),
@@ -357,11 +376,16 @@ class DataLoader:
             'refund_amount': refund_amount,
             'net_revenue': net_revenue,
             'total_revenue': net_revenue,  # Alias for backward compatibility
+            'service_revenue': service_revenue,
+            'product_revenue': product_revenue,
+            'service_revenue_pct': (service_revenue / gross_revenue * 100) if gross_revenue > 0 else 0,
             'refund_rate_pct': (refund_amount / gross_revenue * 100) if gross_revenue > 0 else 0,
             'num_refunds': len(refunds_df),
             'num_sales': len(sales_df),
+            'num_services': len(service_df[~service_df['is_refund']]),
             'unique_customers': df['customer_name'].nunique(),
             'unique_products': df['item_name'].nunique(),
+            'unique_products_excl_services': product_df['item_name'].nunique(),
             'unique_orders': df['order_id'].nunique(),
             'avg_order_value': df.groupby('order_id')['total'].sum().mean(),
             'total_quantity_sold': sales_df['quantity'].sum(),  # Only count positive sales

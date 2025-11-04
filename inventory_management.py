@@ -21,7 +21,15 @@ class InventoryManager:
             sales_data: Preprocessed sales DataFrame
         """
         self.inventory_data = inventory_data.copy()
-        self.sales_data = sales_data.copy()
+        
+        # Filter out service items from sales data - services are not physical inventory
+        if 'is_service' in sales_data.columns:
+            self.sales_data = sales_data[~sales_data['is_service']].copy()
+            num_services_excluded = sales_data['is_service'].sum()
+            if num_services_excluded > 0:
+                print(f"ℹ️  Inventory Management: Excluded {num_services_excluded} service transactions")
+        else:
+            self.sales_data = sales_data.copy()
         
         # Standardize inventory column names
         self._standardize_inventory_columns()
@@ -53,31 +61,53 @@ class InventoryManager:
         The system uses **Quantity** as the authoritative stock level for all calculations.
         Units and Pieces are informational/display purposes only.
         """
-        # Common column name variations
-        column_map = {
-            'Item Code': 'item_code',
-            'Item Name': 'item_name',
-            'Iten Name': 'item_name',  # Handle typo
-            'Selling Price': 'selling_price',
-            'Units': 'units',
-            'Pieces': 'pieces',
-            'Quantity': 'quantity',
-            'Category': 'category'
-        }
+        # Import config to use global COLUMN_MAPPING (includes Arabic columns)
+        import config
         
-        # Apply mapping
-        for original, standard in column_map.items():
-            if original in self.inventory_data.columns:
-                self.inventory_data.rename(columns={original: standard}, inplace=True)
+        # Apply mapping from config (includes both English and Arabic column names)
+        column_map = {}
+        df_columns = self.inventory_data.columns.tolist()
         
-        # Case-insensitive fallback
-        self.inventory_data.columns = [col.lower().replace(' ', '_') for col in self.inventory_data.columns]
+        for original_col, standard_col in config.COLUMN_MAPPING.items():
+            if original_col in df_columns:
+                column_map[original_col] = standard_col
+            # Try case-insensitive matching for English columns only
+            else:
+                for col in df_columns:
+                    if col.lower().strip() == original_col.lower().strip():
+                        column_map[col] = standard_col
+                        break
+        
+        # Special handling for inventory files: Shorter Arabic column names
+        # 'كود' alone means 'item_code' in inventory (in sales files it means 'receipt')
+        if 'كود' in df_columns and 'كود الصنف' not in df_columns:
+            column_map['كود'] = 'item_code'
+        
+        # 'الاسم' alone means 'item_name' in inventory
+        if 'الاسم' in df_columns and 'اسم الصنف' not in df_columns:
+            column_map['الاسم'] = 'item_name'
+        
+        # Apply the mapping
+        if column_map:
+            print(f"📋 Mapped inventory columns: {list(column_map.keys())} → {list(column_map.values())}")
+            self.inventory_data.rename(columns=column_map, inplace=True)
+        
+        # Case-insensitive fallback for any remaining unmapped columns
+        # Only lowercase columns that are not already in standard format
+        remaining_columns = {}
+        for col in self.inventory_data.columns:
+            if col not in ['item_code', 'item_name', 'selling_price', 'units', 'pieces', 'quantity', 'category']:
+                remaining_columns[col] = col.lower().replace(' ', '_')
+        
+        if remaining_columns:
+            self.inventory_data.rename(columns=remaining_columns, inplace=True)
         
         # Ensure required columns exist
         required_cols = ['item_code', 'item_name', 'quantity']
         missing = [col for col in required_cols if col not in self.inventory_data.columns]
         if missing:
-            raise ValueError(f"Missing required inventory columns: {missing}")
+            print(f"❌ Available columns after mapping: {list(self.inventory_data.columns)}")
+            raise ValueError(f"Missing required inventory columns: {missing}. Please ensure your file has columns: 'كود الصنف', 'اسم الصنف', 'الكمية' (Arabic) or 'Item Code', 'Item Name', 'Quantity' (English)")
         
         # Convert quantity to numeric
         self.inventory_data['quantity'] = pd.to_numeric(
