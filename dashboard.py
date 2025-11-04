@@ -556,7 +556,7 @@ def sales_analysis_page(data):
             yaxis_title=f"{t('revenue')} ($)",
             hovermode='x unified'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         # Orders and customers
         col1, col2 = st.columns(2)
@@ -568,7 +568,7 @@ def sales_analysis_page(data):
                 color='orders',
                 color_continuous_scale='Blues'
             )
-            st.plotly_chart(fig_orders, use_container_width=True)
+            st.plotly_chart(fig_orders, width='stretch')
         
         with col2:
             fig_customers = px.bar(
@@ -577,7 +577,7 @@ def sales_analysis_page(data):
                 color='customers',
                 color_continuous_scale='Greens'
             )
-            st.plotly_chart(fig_customers, use_container_width=True)
+            st.plotly_chart(fig_customers, width='stretch')
     
     with tab2:
         st.subheader(t('top_performing_products'))
@@ -678,7 +678,7 @@ def sales_analysis_page(data):
         
         st.dataframe(
             format_datetime_columns(top_products_display),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             height=400
         )
@@ -705,7 +705,7 @@ def sales_analysis_page(data):
         )
         fig.update_xaxes(tickangle=-45)
         fig.update_layout(showlegend=False, height=500)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with tab3:
         st.subheader(t('time_based_patterns'))
@@ -723,7 +723,7 @@ def sales_analysis_page(data):
                 color='revenue',
                 color_continuous_scale='Greens'
             )
-            st.plotly_chart(fig_dow, use_container_width=True)
+            st.plotly_chart(fig_dow, width='stretch')
         
         with col2:
             # Hourly patterns
@@ -744,7 +744,7 @@ def sales_analysis_page(data):
                 dtick=1,
                 range=[-0.5, 23.5]
             )
-            st.plotly_chart(fig_hourly, use_container_width=True)
+            st.plotly_chart(fig_hourly, width='stretch')
     
     with tab4:
         st.subheader(t('anomaly_detection'))
@@ -786,7 +786,7 @@ def sales_analysis_page(data):
             yaxis_title='Revenue ($)',
             hovermode='closest'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         # Show anomalous days
         if len(anomaly_days) > 0:
@@ -821,7 +821,7 @@ def sales_analysis_page(data):
             # Format the dataframe
             st.dataframe(
                 format_datetime_columns(anomaly_display),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -948,14 +948,14 @@ def sales_analysis_page(data):
                         labels={'refund_amount': t('refund_amount'), 'item_name': t('product')}
                     )
                     fig.update_xaxes(tickangle=-45)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     
                     # Detailed table - shows same number as slider
                     refund_products_display = top_refunded.head(n_refunded).copy()
                     refund_products_display = translate_columns(refund_products_display)
                     st.dataframe(
                         refund_products_display,
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True
                     )
                 else:
@@ -978,14 +978,14 @@ def sales_analysis_page(data):
                         labels={'refund_amount': t('refund_amount'), 'customer_name': t('customer')}
                     )
                     fig.update_xaxes(tickangle=-45)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     
                     # Detailed table - shows same number as slider
                     refund_customers_display = top_refund_customers.head(n_refund_customers).copy()
                     refund_customers_display = translate_columns(refund_customers_display)
                     st.dataframe(
                         refund_customers_display,
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True
                     )
                 else:
@@ -1016,7 +1016,7 @@ def sales_analysis_page(data):
                         yaxis_title=t('refund_amount') + ' ($)',
                         hovermode='x unified'
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     
                     # Orders trend
                     fig2 = px.bar(
@@ -1028,7 +1028,7 @@ def sales_analysis_page(data):
                         color='refund_orders',
                         color_continuous_scale='Reds'
                     )
-                    st.plotly_chart(fig2, use_container_width=True)
+                    st.plotly_chart(fig2, width='stretch')
                 else:
                     st.info(t('no_data_available'))
             
@@ -1108,7 +1108,7 @@ def sales_analysis_page(data):
                     
                     st.dataframe(
                         format_datetime_columns(refund_display),
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True
                     )
                     st.caption("⭐ Quantity = total units refunded (Units and Pieces show breakdown if available)")
@@ -1197,7 +1197,7 @@ def monthly_analysis_page(data):
                     lambda x: 'background-color: #ffe6e6' if 'Refund' in str(x) else '',
                     subset=[refund_col, refund_orders_col, items_refunded_col, rate_col]
                 ),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -1221,7 +1221,7 @@ def monthly_analysis_page(data):
                 height=500
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info(t('no_monthly_trend'))
     
@@ -1318,7 +1318,7 @@ def monthly_analysis_page(data):
                         aov_col: '${:,.2f}',
                         rev_pct_col: '{:.2f}%'
                     }),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
                 
@@ -1331,7 +1331,7 @@ def monthly_analysis_page(data):
                     title=f'Category Distribution - {period_label}',
                     hole=0.4
                 )
-                st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_pie, width='stretch')
             
             # Stacked bar chart for all months
             st.markdown("#### Category Spending Trend Across All Months")
@@ -1365,7 +1365,7 @@ def monthly_analysis_page(data):
                 hovermode='x unified'
             )
             
-            st.plotly_chart(fig_stacked, use_container_width=True)
+            st.plotly_chart(fig_stacked, width='stretch')
             
             # Download option
             csv_data = monthly_category.to_csv(index=False)
@@ -1513,7 +1513,7 @@ def monthly_analysis_page(data):
                                          ('color: red' if isinstance(x, str) and '-' in str(x) and '%' in str(x) else ''),
                                 subset=[change_pct_label]
                             ),
-                            use_container_width=True,
+                            width='stretch',
                             hide_index=True
                         )
                         
@@ -1547,7 +1547,7 @@ def monthly_analysis_page(data):
                             hovermode='x unified'
                         )
                         
-                        st.plotly_chart(fig_compare, use_container_width=True)
+                        st.plotly_chart(fig_compare, width='stretch')
                         
                         # Download comparison
                         csv_comparison = category_comp.to_csv(index=False)
@@ -1621,13 +1621,13 @@ def customer_analysis_page(data):
             st.write(f"**High-Value Customers (by Spend) - Top {n_high_value}**")
             high_value = analyzer.get_high_value_customers(n_high_value)
             high_value_display = translate_columns(high_value.copy())
-            st.dataframe(format_datetime_columns(high_value_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(high_value_display), width='stretch', hide_index=True)
         
         with col2:
             st.write(f"**Frequent Buyers - Top {n_frequent}**")
             frequent = analyzer.get_frequent_buyers(n_frequent)
             frequent_display = translate_columns(frequent.copy())
-            st.dataframe(format_datetime_columns(frequent_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(frequent_display), width='stretch', hide_index=True)
         
         # Add customer product history section
         st.markdown("---")
@@ -1675,7 +1675,7 @@ def customer_analysis_page(data):
                     product_history_display = translate_columns(product_history.copy())
                     st.dataframe(
                         format_datetime_columns(product_history_display),
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True
                     )
                     
@@ -1696,7 +1696,7 @@ def customer_analysis_page(data):
                             labels={'item_name': 'Product', 'total_spent': 'Total Spent ($)'}
                         )
                         fig_spend.update_xaxes(tickangle=-45)
-                        st.plotly_chart(fig_spend, use_container_width=True)
+                        st.plotly_chart(fig_spend, width='stretch')
                     
                     with col_viz2:
                         # Top products by purchase frequency
@@ -1711,7 +1711,7 @@ def customer_analysis_page(data):
                             labels={'item_name': 'Product', 'times_purchased': 'Times Purchased'}
                         )
                         fig_freq.update_xaxes(tickangle=-45)
-                        st.plotly_chart(fig_freq, use_container_width=True)
+                        st.plotly_chart(fig_freq, width='stretch')
                     
                     # Category breakdown
                     if 'category' in product_history.columns:
@@ -1738,7 +1738,7 @@ def customer_analysis_page(data):
                                 title='Spending by Category',
                                 color_discrete_sequence=px.colors.qualitative.Set3
                             )
-                            st.plotly_chart(fig_cat, use_container_width=True)
+                            st.plotly_chart(fig_cat, width='stretch')
                         
                         with col_cat2:
                             st.dataframe(
@@ -1747,7 +1747,7 @@ def customer_analysis_page(data):
                                     'Total Quantity': '{:,.0f}',
                                     'Times Purchased': '{:,.0f}'
                                 }),
-                                use_container_width=True,
+                                width='stretch',
                                 hide_index=True
                             )
                     
@@ -1785,10 +1785,10 @@ def customer_analysis_page(data):
                     'total_spent': 'Total Spent ($)'
                 }
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             churn_risk_display = translate_columns(churn_risk.copy())
-            st.dataframe(format_datetime_columns(churn_risk_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(churn_risk_display), width='stretch', hide_index=True)
         else:
             st.success("No customers at risk of churning!")
     
@@ -1824,7 +1824,7 @@ def customer_analysis_page(data):
                 names='Segment',
                 title='Customer Distribution by Segment'
             )
-            st.plotly_chart(fig_count, use_container_width=True)
+            st.plotly_chart(fig_count, width='stretch')
         
         with col2:
             fig_revenue = px.pie(
@@ -1833,9 +1833,9 @@ def customer_analysis_page(data):
                 names='Segment',
                 title='Revenue Contribution by Segment'
             )
-            st.plotly_chart(fig_revenue, use_container_width=True)
+            st.plotly_chart(fig_revenue, width='stretch')
         
-        st.dataframe(format_datetime_columns(segment_df_translated), use_container_width=True, hide_index=True)
+        st.dataframe(format_datetime_columns(segment_df_translated), width='stretch', hide_index=True)
     
     with tab4:
         st.subheader(t('new_customers'))
@@ -1856,11 +1856,11 @@ def customer_analysis_page(data):
                 y='new_customers',
                 title='Daily New Customer Acquisition'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Translate columns in dataframe
             new_customers_display = translate_columns(new_customers.copy())
-            st.dataframe(format_datetime_columns(new_customers_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(new_customers_display), width='stretch', hide_index=True)
         else:
             st.info(f"No new customers in the last {days_back} days")
 
@@ -1940,7 +1940,7 @@ def product_analysis_page(data):
                 
                 fast_movers_display = translate_columns(fast_movers_display)
                 
-                st.dataframe(format_datetime_columns(fast_movers_display), use_container_width=True, hide_index=True)
+                st.dataframe(format_datetime_columns(fast_movers_display), width='stretch', hide_index=True)
                 st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
                 
                 # Quick stats with refund info
@@ -1975,7 +1975,7 @@ def product_analysis_page(data):
                 
                 slow_movers_display = translate_columns(slow_movers_display)
                 
-                st.dataframe(format_datetime_columns(slow_movers_display), use_container_width=True, hide_index=True)
+                st.dataframe(format_datetime_columns(slow_movers_display), width='stretch', hide_index=True)
                 st.caption("⭐ Quantity Sold = total units sold (Units and Pieces are breakdowns)")
                 
                 # Quick stats with refund info
@@ -2023,7 +2023,7 @@ def product_analysis_page(data):
                 barmode='group'
             )
             fig.update_xaxes(tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
     
     with tab2:
         st.subheader(t('abc_classification'))
@@ -2059,12 +2059,12 @@ def product_analysis_page(data):
             # Update axis labels
             fig.update_xaxes(title_text=t('abc_class') if 'abc_class' in config.TRANSLATIONS[CURRENT_LANG] else 'ABC Class')
             fig.update_yaxes(title_text=t('revenue') if 'revenue' in config.TRANSLATIONS[CURRENT_LANG] else 'Revenue')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         with col2:
             # Translate for display in table
             abc_summary_display = translate_columns(abc_summary)
-            st.dataframe(format_datetime_columns(abc_summary_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(abc_summary_display), width='stretch', hide_index=True)
         
         # Full table
         class_filter = st.multiselect(
@@ -2081,7 +2081,7 @@ def product_analysis_page(data):
         
         filtered_abc = translate_columns(filtered_abc)
         
-        st.dataframe(format_datetime_columns(filtered_abc), use_container_width=True, hide_index=True)
+        st.dataframe(format_datetime_columns(filtered_abc), width='stretch', hide_index=True)
         st.caption("⭐ Quantity Sold = total units sold (ABC classification based on revenue)")
     
     with tab3:
@@ -2100,7 +2100,7 @@ def product_analysis_page(data):
                 names=stage_counts.index,
                 title='Products by Lifecycle Stage'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         with col2:
             stage_revenue = lifecycle.groupby('lifecycle_stage')['revenue'].sum()
@@ -2110,7 +2110,7 @@ def product_analysis_page(data):
                 title='Revenue by Lifecycle Stage',
                 labels={'x': 'Stage', 'y': 'Revenue ($)'}
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         # Add marker to quantity and translate columns
         lifecycle_display = lifecycle.copy()
@@ -2119,7 +2119,7 @@ def product_analysis_page(data):
         
         lifecycle_display = translate_columns(lifecycle_display)
         
-        st.dataframe(format_datetime_columns(lifecycle_display), use_container_width=True, hide_index=True)
+        st.dataframe(format_datetime_columns(lifecycle_display), width='stretch', hide_index=True)
         st.caption("⭐ Quantity Sold = total units sold (lifecycle stage based on sales trends)")
 
 
@@ -2184,7 +2184,7 @@ def inventory_management_page(data):
                 'Quantity': [1.50, 0.50, 3.00],
                 'Category': ['Pain Relief', 'Antibiotics', 'Vitamins']
             })
-            st.dataframe(example_df, use_container_width=True)
+            st.dataframe(example_df, width='stretch')
             st.caption("Example: ITEM001 has 1 unit + 1 piece = Quantity 1.50 | ITEM002 has 0 units + 1 piece = Quantity 0.50")
         return
     
@@ -2250,7 +2250,7 @@ def inventory_management_page(data):
         if len(category_df) > 0:
             # Category table FIRST
             category_df_display = translate_columns(category_df.copy())
-            st.dataframe(category_df_display, use_container_width=True, hide_index=True)
+            st.dataframe(category_df_display, width='stretch', hide_index=True)
             
             st.markdown("---")
             
@@ -2268,7 +2268,7 @@ def inventory_management_page(data):
                     color_continuous_scale='Blues'
                 )
                 fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             with col2:
                 fig = px.bar(
@@ -2281,7 +2281,7 @@ def inventory_management_page(data):
                     color_continuous_scale='Greens'
                 )
                 fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
         else:
             st.info("Category information not available in inventory data")
     
@@ -2318,7 +2318,7 @@ def inventory_management_page(data):
                 title="Reorder Signal Distribution",
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         with col2:
             # Top items needing reorder
@@ -2341,7 +2341,7 @@ def inventory_management_page(data):
                     }
                 )
                 fig.update_layout(yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
         
         # Display table
         st.markdown(f"### 📋 {t('reorder_recommendations')} ({len(filtered_df)} items)")
@@ -2365,7 +2365,7 @@ def inventory_management_page(data):
         
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )
         
@@ -2408,7 +2408,7 @@ def inventory_management_page(data):
                 },
                 color_continuous_scale='Reds'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Display table
             display_cols = ['item_name', 'category', 'units', 'pieces', 'quantity', 
@@ -2430,7 +2430,7 @@ def inventory_management_page(data):
             if est_date_col in display_df.columns:
                 display_df[est_date_col] = pd.to_datetime(display_df[est_date_col]).dt.strftime('%Y-%m-%d')
             
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width='stretch', hide_index=True)
             st.caption("⭐ Quantity is the total stock used for stockout prediction")
         else:
             st.success(f"✓ No items at risk of stockout in the next {config.STOCKOUT_FORECAST_DAYS} days!")
@@ -2459,7 +2459,7 @@ def inventory_management_page(data):
                     color_continuous_scale='Blues'
                 )
                 fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             # Display table
             display_cols = ['item_name', 'category', 'units', 'pieces', 'quantity', 
@@ -2474,7 +2474,7 @@ def inventory_management_page(data):
             # Translate column names
             display_df = translate_columns(display_df)
             
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width='stretch', hide_index=True)
             st.caption("⭐ Quantity is the total stock - high Days of Stock indicates slow-moving items")
         else:
             st.success(f"✓ No overstocked items (>{config.OVERSTOCK_THRESHOLD_DAYS} days of stock)")
@@ -2496,7 +2496,7 @@ def inventory_management_page(data):
                 title="ABC Classification Distribution",
                 color_discrete_sequence=['#2ecc71', '#f39c12', '#e74c3c']
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         with col2:
             abc_revenue = abc_df.groupby('abc_class')['total_revenue'].sum().sort_index()
@@ -2508,7 +2508,7 @@ def inventory_management_page(data):
                 color=abc_revenue.index,
                 color_discrete_sequence=['#2ecc71', '#f39c12', '#e74c3c']
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         # ABC table
         st.markdown("### ABC Classification Details")
@@ -2524,7 +2524,7 @@ def inventory_management_page(data):
         # Translate column names
         display_df = translate_columns(display_df)
         
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width='stretch', hide_index=True)
         st.caption("⭐ Quantity shows current stock | Total Sold shows historical sales | ABC Class based on revenue")
 
 
@@ -2611,7 +2611,7 @@ def rfm_analysis_page(data):
                 names='segment',
                 title='Customer Distribution by Segment'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         with col2:
             fig = px.bar(
@@ -2623,10 +2623,10 @@ def rfm_analysis_page(data):
                 color_continuous_scale='Blues'
             )
             fig.update_xaxes(tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         segment_summary_display = translate_columns(segment_summary.copy())
-        st.dataframe(format_datetime_columns(segment_summary_display), use_container_width=True, hide_index=True)
+        st.dataframe(format_datetime_columns(segment_summary_display), width='stretch', hide_index=True)
         
         # Segment details
         st.subheader(t('segment_details'))
@@ -2648,7 +2648,7 @@ def rfm_analysis_page(data):
         display_cols = ['customer_name', 'phone', 'recency', 'frequency', 'monetary', 
                        'r_score', 'f_score', 'm_score', 'rfm_score']
         segment_customers_display = translate_columns(segment_customers.head(20)[display_cols].copy())
-        st.dataframe(format_datetime_columns(segment_customers_display), use_container_width=True, hide_index=True)
+        st.dataframe(format_datetime_columns(segment_customers_display), width='stretch', hide_index=True)
         
         # Export buttons
         col_btn1, col_btn2 = st.columns(2)
@@ -2739,7 +2739,7 @@ def rfm_analysis_page(data):
                 title=f'Customer Segments in {selected_category}',
                 hole=0.4
             )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_pie, width='stretch')
         
         with col2:
             # Revenue by segment bar chart
@@ -2752,7 +2752,7 @@ def rfm_analysis_page(data):
                 color_continuous_scale='Viridis'
             )
             fig_bar.update_xaxes(tickangle=-45)
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width='stretch')
         
         # Summary table
         st.markdown(f"#### Segment Summary for {selected_category}")
@@ -2781,7 +2781,7 @@ def rfm_analysis_page(data):
                 rec_col: '{:.0f}',
                 freq_col: '{:.1f}'
             }),
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )
         
@@ -2823,7 +2823,7 @@ def rfm_analysis_page(data):
                 freq_col: '{:.0f}',
                 mon_col: '${:,.2f}'
             }),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             height=600  # Set a fixed height with scrolling
         )
@@ -2947,10 +2947,10 @@ def refill_prediction_page(data):
                 title=f'Refill Timeline (Next {days_ahead} Days)',
                 hover_data=hover_cols
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             upcoming_display = translate_columns(upcoming.copy())
-            st.dataframe(format_datetime_columns(upcoming_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(upcoming_display), width='stretch', hide_index=True)
         else:
             st.info(f"No refills expected in the next {days_ahead} days")
     
@@ -3072,12 +3072,12 @@ def refill_prediction_page(data):
                     orientation='h'
                 )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Full data table
             st.markdown("### 📋 Complete Overdue List")
             overdue_display = translate_columns(overdue.copy())
-            st.dataframe(format_datetime_columns(overdue_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(overdue_display), width='stretch', hide_index=True)
         else:
             if total_overdue > 0:
                 st.info(f"📅 No overdue refills in the past {max_overdue_days} days. ({total_overdue} customers haven't ordered in {max_overdue_days}+ days - likely lost)")
@@ -3109,7 +3109,7 @@ def refill_prediction_page(data):
                         st.success(f"{status}: {count}")
             
             schedule_display = translate_columns(schedule.copy())
-            st.dataframe(format_datetime_columns(schedule_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(schedule_display), width='stretch', hide_index=True)
         else:
             st.info("No refill history for this customer")
     
@@ -3136,7 +3136,7 @@ def refill_prediction_page(data):
             # Format for display
             st.write("**Top 20 Predicted Order Values**")
             top_predictions_display = translate_columns(top_predictions.copy())
-            st.dataframe(format_datetime_columns(top_predictions_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(top_predictions_display), width='stretch', hide_index=True)
             
             # Price trend analysis
             st.markdown("---")
@@ -3157,7 +3157,7 @@ def refill_prediction_page(data):
                            title='Price Trends Across Products',
                            color='Trend',
                            color_discrete_map={'Increasing': 'red', 'Stable': 'blue', 'Decreasing': 'green'})
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             with col2:
                 st.write("**🎯 Regularity Score Distribution**")
@@ -3173,7 +3173,7 @@ def refill_prediction_page(data):
                 fig = px.bar(reg_data, x='Regularity', y='Count',
                            title='Purchase Regularity Distribution',
                            color='Count', color_continuous_scale='Blues')
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             # Summary insights
             st.markdown("---")
@@ -3274,7 +3274,7 @@ def cross_sell_page(data):
             bundles_display = translate_columns(bundles_display)
             st.dataframe(
                 bundles_display,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -3344,7 +3344,7 @@ def cross_sell_page(data):
                 # Top associations
                 st.write(f"**Top {len(affinity_filtered)} Product Pairs (by Lift)**")
                 affinity_display = translate_columns(affinity_filtered.copy())
-                st.dataframe(format_datetime_columns(affinity_display), use_container_width=True, hide_index=True)
+                st.dataframe(format_datetime_columns(affinity_display), width='stretch', hide_index=True)
                 
                 # Heatmap of top products
                 if len(affinity_filtered) >= 5:
@@ -3378,7 +3378,7 @@ def cross_sell_page(data):
                         labels=dict(color="Lift")
                     )
                     fig.update_xaxes(tickangle=-45)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
             else:
                 st.info(f"No associations found with lift >= {min_lift_filter}. Try lowering the minimum lift.")
         else:
@@ -3418,7 +3418,7 @@ def cross_sell_page(data):
             title='Basket Size Distribution',
             labels={'x': 'Number of Items', 'y': 'Number of Orders'}
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with tab4:
         st.subheader(t('product_recommendations'))
@@ -3461,12 +3461,12 @@ def cross_sell_page(data):
                     }
                 )
                 fig.update_xaxes(tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Detailed table
                 st.markdown("### Detailed Recommendations")
                 recommendations_display = translate_columns(recommendations.copy())
-                st.dataframe(format_datetime_columns(recommendations_display), use_container_width=True, hide_index=True)
+                st.dataframe(format_datetime_columns(recommendations_display), width='stretch', hide_index=True)
                 
                 # Explanations
                 st.markdown("---")
@@ -3518,7 +3518,7 @@ def cross_sell_page(data):
                                 'Product': other_items.index,
                                 'Times': other_items.values
                             }),
-                            use_container_width=True,
+                            width='stretch',
                             hide_index=True
                         )
                     else:
@@ -3623,7 +3623,7 @@ def ai_query_page(data):
                         
                         if isinstance(result['data'], list) and len(result['data']) > 0:
                             df_result = pd.DataFrame(result['data'])
-                            st.dataframe(format_datetime_columns(df_result), use_container_width=True, hide_index=True)
+                            st.dataframe(format_datetime_columns(df_result), width='stretch', hide_index=True)
                             
                             # Download button
                             csv = df_result.to_csv(index=False)
@@ -3660,7 +3660,7 @@ def ai_query_page(data):
                                 y=result['viz_config']['y'],
                                 title=result['viz_config']['title']
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width='stretch')
                         elif result['viz_type'] == 'line_chart' and isinstance(result['data'], list):
                             df_viz = pd.DataFrame(result['data'])
                             fig = px.line(
@@ -3670,7 +3670,7 @@ def ai_query_page(data):
                                 title=result['viz_config']['title'],
                                 markers=True
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width='stretch')
                 else:
                     st.error(result['answer'])
                     
@@ -3780,7 +3780,7 @@ def export_page(data):
             
             st.success(t('report_generated'))
             report_df_display = translate_columns(report_df.copy())
-            st.dataframe(format_datetime_columns(report_df_display), use_container_width=True, hide_index=True)
+            st.dataframe(format_datetime_columns(report_df_display), width='stretch', hide_index=True)
 
 
 def main():
