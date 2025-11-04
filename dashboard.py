@@ -1335,6 +1335,7 @@ def monthly_analysis_page(data):
                     title=f'Category Distribution - {period_label}',
                     hole=0.4
                 )
+                fig_pie.update_layout(height=600)
                 st.plotly_chart(fig_pie, width='stretch')
             
             # Stacked bar chart for all months
@@ -1742,6 +1743,7 @@ def customer_analysis_page(data):
                                 title='Spending by Category',
                                 color_discrete_sequence=px.colors.qualitative.Set3
                             )
+                            fig_cat.update_layout(height=600)
                             st.plotly_chart(fig_cat, width='stretch')
                         
                         with col_cat2:
@@ -1828,6 +1830,7 @@ def customer_analysis_page(data):
                 names='Segment',
                 title='Customer Distribution by Segment'
             )
+            fig_count.update_layout(height=600)
             st.plotly_chart(fig_count, width='stretch')
         
         with col2:
@@ -1837,6 +1840,7 @@ def customer_analysis_page(data):
                 names='Segment',
                 title='Revenue Contribution by Segment'
             )
+            fig_revenue.update_layout(height=600)
             st.plotly_chart(fig_revenue, width='stretch')
         
         st.dataframe(format_datetime_columns(segment_df_translated), use_container_width=True, hide_index=True)
@@ -2104,6 +2108,7 @@ def product_analysis_page(data):
                 names=stage_counts.index,
                 title='Products by Lifecycle Stage'
             )
+            fig.update_layout(height=600)
             st.plotly_chart(fig, width='stretch')
         
         with col2:
@@ -2322,6 +2327,7 @@ def inventory_management_page(data):
                 title="Reorder Signal Distribution",
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
+            fig.update_layout(height=600)
             st.plotly_chart(fig, width='stretch')
         
         with col2:
@@ -2500,6 +2506,7 @@ def inventory_management_page(data):
                 title="ABC Classification Distribution",
                 color_discrete_sequence=['#2ecc71', '#f39c12', '#e74c3c']
             )
+            fig.update_layout(height=600)
             st.plotly_chart(fig, width='stretch')
         
         with col2:
@@ -2615,6 +2622,7 @@ def rfm_analysis_page(data):
                 names='segment',
                 title='Customer Distribution by Segment'
             )
+            fig.update_layout(height=600)
             st.plotly_chart(fig, width='stretch')
         
         with col2:
@@ -2743,6 +2751,7 @@ def rfm_analysis_page(data):
                 title=f'Customer Segments in {selected_category}',
                 hole=0.4
             )
+            fig_pie.update_layout(height=600)
             st.plotly_chart(fig_pie, width='stretch')
         
         with col2:
@@ -3161,6 +3170,7 @@ def refill_prediction_page(data):
                            title='Price Trends Across Products',
                            color='Trend',
                            color_discrete_map={'Increasing': 'red', 'Stable': 'blue', 'Decreasing': 'green'})
+                fig.update_layout(height=600)
                 st.plotly_chart(fig, width='stretch')
             
             with col2:
