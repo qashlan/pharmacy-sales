@@ -678,7 +678,7 @@ def sales_analysis_page(data):
         
         st.dataframe(
             format_datetime_columns(top_products_display),
-            width='stretch',
+            use_container_width=True,
             hide_index=True,
             height=400
         )
@@ -821,7 +821,7 @@ def sales_analysis_page(data):
             # Format the dataframe
             st.dataframe(
                 format_datetime_columns(anomaly_display),
-                width='stretch',
+                use_container_width=True,
                 hide_index=True
             )
             
@@ -955,7 +955,7 @@ def sales_analysis_page(data):
                     refund_products_display = translate_columns(refund_products_display)
                     st.dataframe(
                         refund_products_display,
-                        width='stretch',
+                        use_container_width=True,
                         hide_index=True
                     )
                 else:
@@ -985,7 +985,7 @@ def sales_analysis_page(data):
                     refund_customers_display = translate_columns(refund_customers_display)
                     st.dataframe(
                         refund_customers_display,
-                        width='stretch',
+                        use_container_width=True,
                         hide_index=True
                     )
                 else:
@@ -1108,7 +1108,7 @@ def sales_analysis_page(data):
                     
                     st.dataframe(
                         format_datetime_columns(refund_display),
-                        width='stretch',
+                        use_container_width=True,
                         hide_index=True
                     )
                     st.caption("⭐ Quantity = total units refunded (Units and Pieces show breakdown if available)")
@@ -1197,7 +1197,7 @@ def monthly_analysis_page(data):
                     lambda x: 'background-color: #ffe6e6' if 'Refund' in str(x) else '',
                     subset=[refund_col, refund_orders_col, items_refunded_col, rate_col]
                 ),
-                width='stretch',
+                use_container_width=True,
                 hide_index=True
             )
             
@@ -1318,7 +1318,7 @@ def monthly_analysis_page(data):
                         aov_col: '${:,.2f}',
                         rev_pct_col: '{:.2f}%'
                     }),
-                    width='stretch',
+                    use_container_width=True,
                     hide_index=True
                 )
                 
@@ -1513,7 +1513,7 @@ def monthly_analysis_page(data):
                                          ('color: red' if isinstance(x, str) and '-' in str(x) and '%' in str(x) else ''),
                                 subset=[change_pct_label]
                             ),
-                            width='stretch',
+                            use_container_width=True,
                             hide_index=True
                         )
                         
@@ -1675,7 +1675,7 @@ def customer_analysis_page(data):
                     product_history_display = translate_columns(product_history.copy())
                     st.dataframe(
                         format_datetime_columns(product_history_display),
-                        width='stretch',
+                        use_container_width=True,
                         hide_index=True
                     )
                     
@@ -1747,7 +1747,7 @@ def customer_analysis_page(data):
                                     'Total Quantity': '{:,.0f}',
                                     'Times Purchased': '{:,.0f}'
                                 }),
-                                width='stretch',
+                                use_container_width=True,
                                 hide_index=True
                             )
                     
@@ -2365,7 +2365,7 @@ def inventory_management_page(data):
         
         st.dataframe(
             display_df,
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -2781,7 +2781,7 @@ def rfm_analysis_page(data):
                 rec_col: '{:.0f}',
                 freq_col: '{:.1f}'
             }),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -2823,7 +2823,7 @@ def rfm_analysis_page(data):
                 freq_col: '{:.0f}',
                 mon_col: '${:,.2f}'
             }),
-            width='stretch',
+            use_container_width=True,
             hide_index=True,
             height=600  # Set a fixed height with scrolling
         )
@@ -3274,7 +3274,7 @@ def cross_sell_page(data):
             bundles_display = translate_columns(bundles_display)
             st.dataframe(
                 bundles_display,
-                width='stretch',
+                use_container_width=True,
                 hide_index=True
             )
             
@@ -3518,7 +3518,7 @@ def cross_sell_page(data):
                                 'Product': other_items.index,
                                 'Times': other_items.values
                             }),
-                            width='stretch',
+                            use_container_width=True,
                             hide_index=True
                         )
                     else:
