@@ -27,6 +27,10 @@ pd.set_option('display.max_colwidth', None)
 pd.options.display.date_dayfirst = False
 pd.options.display.date_yearfirst = True
 
+# Configure Plotly for Streamlit dark theme
+import plotly.io as pio
+pio.templates.default = "plotly_dark"
+
 # Page configuration
 st.set_page_config(
     page_title="Pharmacy Sales Analytics",
