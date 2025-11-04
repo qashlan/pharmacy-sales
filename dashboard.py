@@ -1193,7 +1193,7 @@ def monthly_analysis_page(data):
                     items_sold_col: '{:,.0f}',
                     items_refunded_col: '{:,.0f}',
                     mom_col: '{:+.2f}%'
-                }).applymap(
+                }).map(
                     lambda x: 'background-color: #ffe6e6' if 'Refund' in str(x) else '',
                     subset=[refund_col, refund_orders_col, items_refunded_col, rate_col]
                 ),
@@ -1508,7 +1508,7 @@ def monthly_analysis_page(data):
                                 f'{month2_name} {qty_label}': '{:,.0f}',
                                 f'{month1_name} {orders_label}': '{:,.0f}',
                                 f'{month2_name} {orders_label}': '{:,.0f}'
-                            }).applymap(
+                            }).map(
                                 lambda x: 'color: green' if isinstance(x, str) and '+' in str(x) and '%' in str(x) else 
                                          ('color: red' if isinstance(x, str) and '-' in str(x) and '%' in str(x) else ''),
                                 subset=[change_pct_label]
