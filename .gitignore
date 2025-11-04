@@ -88,5 +88,6 @@ coverage.xml
 dmypy.json
 
 # Streamlit
-.streamlit/
+.streamlit/secrets.toml
+# Note: .streamlit/config.toml should be committed for deployment
 
